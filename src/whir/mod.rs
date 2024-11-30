@@ -1,19 +1,19 @@
 use ark_crypto_primitives::merkle_tree::{Config, MultiPath};
+use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use goldilocks::ExtensionField;
-use serde::{de::DeserializeOwned, Serialize};
+// use goldilocks::ExtensionField;
 use std::fmt::Debug;
 
 use crate::errors::Error;
 use crate::poly_utils::MultilinearPoint;
 
 pub mod committer;
+mod fs_utils;
 pub mod iopattern;
 pub mod parameters;
 pub mod pcs;
 pub mod prover;
 pub mod verifier;
-mod fs_utils;
 
 #[derive(Debug, Clone, Default)]
 pub struct Statement<F> {
@@ -39,7 +39,7 @@ where
     transcript.len() + whir_proof.serialized_size(ark_serialize::Compress::Yes)
 }
 
-pub trait PolynomialCommitmentScheme<E: ExtensionField>: Clone {
+pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
     type Param: Clone;
     type ProverParam: Clone;
     type VerifierParam: Clone;

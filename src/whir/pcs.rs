@@ -1,14 +1,13 @@
 use crate::crypto::merkle_tree::blake3::{CompressH, MerkleTreeParams};
-use crate::whir::committer::Witness;
-use crate::whir::parameters::WhirConfig;
-use crate::whir::Error;
-use crate::whir::PolynomialCommitmentScheme;
-use crate::whir::WhirProof;
+use crate::poly_utils::coeffs::CoefficientList;
+use crate::whir::{
+    committer::Witness, parameters::WhirConfig, Error, PolynomialCommitmentScheme, WhirProof,
+};
 
 use ark_crypto_primitives::crh::TwoToOneCRHScheme;
 use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use goldilocks::ExtensionField;
+use nimue::{DefaultHash, IOPattern};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
@@ -19,7 +18,7 @@ type WhirPCSConfig<E> = WhirConfig<E, MerkleTreeParams<E>, ()>;
 
 impl<E> PolynomialCommitmentScheme<E> for Whir<E>
 where
-    E: FftField + ExtensionField + CanonicalSerialize + CanonicalDeserialize,
+    E: FftField + CanonicalSerialize + CanonicalDeserialize,
 {
     type Param = WhirPCSConfig<E>;
     type ProverParam = WhirPCSConfig<E>;
@@ -28,8 +27,8 @@ where
     type Commitment = <CompressH as TwoToOneCRHScheme>::Output;
     type CommitmentChunk = <CompressH as TwoToOneCRHScheme>::Output;
     type Proof = WhirProof<MerkleTreeParams<E>, E>;
-    type Poly = ();
-    type Transcript = ();
+    type Poly = CoefficientList<E>;
+    type Transcript = IOPattern<DefaultHash>;
 
     fn setup(_poly_size: usize) -> Result<Self::Param, Error> {
         todo!()

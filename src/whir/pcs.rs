@@ -8,7 +8,6 @@ use crate::whir::WhirProof;
 use ark_crypto_primitives::crh::TwoToOneCRHScheme;
 use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use goldilocks::ExtensionField;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
@@ -19,7 +18,7 @@ type WhirPCSConfig<E> = WhirConfig<E, MerkleTreeParams<E>, ()>;
 
 impl<E> PolynomialCommitmentScheme<E> for Whir<E>
 where
-    E: FftField + ExtensionField + CanonicalSerialize + CanonicalDeserialize,
+    E: FftField + CanonicalSerialize + CanonicalDeserialize,
 {
     type Param = WhirPCSConfig<E>;
     type ProverParam = WhirPCSConfig<E>;

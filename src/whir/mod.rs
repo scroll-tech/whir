@@ -48,7 +48,7 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
     type Poly: Clone;
     type Transcript: Clone;
 
-    fn setup(poly_size: usize) -> Result<Self::Param, Error>;
+    fn setup(poly_size: usize) -> Self::Param;
 
     fn commit(pp: &Self::ProverParam, poly: &Self::Poly)
         -> Result<Self::CommitmentWithData, Error>;

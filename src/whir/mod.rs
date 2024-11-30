@@ -44,8 +44,6 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
     type ProverParam: Clone;
     type VerifierParam: Clone;
     type CommitmentWithData;
-    type Commitment: Clone + Default + CanonicalSerialize + CanonicalDeserialize;
-    type CommitmentChunk: Clone + Default;
     type Proof: Clone + CanonicalSerialize + CanonicalDeserialize;
     type Poly: Clone;
     type Transcript: Clone;
@@ -55,37 +53,10 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
     fn commit(pp: &Self::ProverParam, poly: &Self::Poly)
         -> Result<Self::CommitmentWithData, Error>;
 
-    fn commit_and_write(
-        pp: &Self::ProverParam,
-        poly: &Self::Poly,
-        transcript: &mut Self::Transcript,
-    ) -> Result<Self::CommitmentWithData, Error> {
-        let comm = Self::commit(pp, poly)?;
-        Self::write_commitment(&Self::get_pure_commitment(&comm), transcript)?;
-        Ok(comm)
-    }
-
-    fn write_commitment(
-        comm: &Self::Commitment,
-        transcript: &mut Self::Transcript,
-    ) -> Result<(), Error>;
-
-    fn get_pure_commitment(comm: &Self::CommitmentWithData) -> Self::Commitment;
-
     fn batch_commit(
         pp: &Self::ProverParam,
         polys: &[Self::Poly],
     ) -> Result<Self::CommitmentWithData, Error>;
-
-    fn batch_commit_and_write(
-        pp: &Self::ProverParam,
-        polys: &[Self::Poly],
-        transcript: &mut Self::Transcript,
-    ) -> Result<Self::CommitmentWithData, Error> {
-        let comm = Self::batch_commit(pp, polys)?;
-        Self::write_commitment(&Self::get_pure_commitment(&comm), transcript)?;
-        Ok(comm)
-    }
 
     fn open(
         pp: &Self::ProverParam,
@@ -111,7 +82,6 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
 
     fn verify(
         vp: &Self::VerifierParam,
-        comm: &Self::Commitment,
         point: &[E],
         eval: &E,
         proof: &Self::Proof,
@@ -120,7 +90,6 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
 
     fn batch_verify(
         vp: &Self::VerifierParam,
-        comm: &Self::Commitment,
         point: &[E],
         evals: &[E],
         proof: &Self::Proof,

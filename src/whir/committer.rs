@@ -9,7 +9,7 @@ use ark_ff::FftField;
 use ark_poly::EvaluationDomain;
 use nimue::{
     plugins::ark::{FieldChallenges, FieldWriter},
-    ByteWriter, Merlin, ProofResult,
+    ByteWriter, ProofResult,
 };
 
 #[cfg(feature = "parallel")]

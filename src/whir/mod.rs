@@ -10,6 +10,7 @@ use crate::poly_utils::MultilinearPoint;
 pub mod committer;
 pub mod iopattern;
 pub mod parameters;
+pub mod pcs;
 pub mod prover;
 pub mod verifier;
 mod fs_utils;
@@ -21,7 +22,7 @@ pub struct Statement<F> {
 }
 
 // Only includes the authentication paths
-#[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
+#[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct WhirProof<MerkleConfig, F>(Vec<(MultiPath<MerkleConfig>, Vec<Vec<F>>)>)
 where
     MerkleConfig: Config<Leaf = [F]>,
@@ -38,23 +39,18 @@ where
     transcript.len() + whir_proof.serialized_size(ark_serialize::Compress::Yes)
 }
 
-pub trait PolynomialCommitmentScheme<E: ExtensionField>: Clone + Debug {
-    type Param: Clone + Debug + Serialize + DeserializeOwned;
-    type ProverParam: Clone + Debug + Serialize + DeserializeOwned;
-    type VerifierParam: Clone + Debug + Serialize + DeserializeOwned;
-    type CommitmentWithData: Clone + Debug + Default + Serialize + DeserializeOwned;
-    type Commitment: Clone + Debug + Default + Serialize + DeserializeOwned;
-    type CommitmentChunk: Clone + Debug + Default;
-    type Proof: Clone + Debug + Serialize + DeserializeOwned;
-    type Poly: Clone + Debug;
-    type Transcript: Clone + Debug;
+pub trait PolynomialCommitmentScheme<E: ExtensionField>: Clone {
+    type Param: Clone;
+    type ProverParam: Clone;
+    type VerifierParam: Clone;
+    type CommitmentWithData;
+    type Commitment: Clone + Default + CanonicalSerialize + CanonicalDeserialize;
+    type CommitmentChunk: Clone + Default;
+    type Proof: Clone + CanonicalSerialize + CanonicalDeserialize;
+    type Poly: Clone;
+    type Transcript: Clone;
 
     fn setup(poly_size: usize) -> Result<Self::Param, Error>;
-
-    fn trim(
-        param: Self::Param,
-        poly_size: usize,
-    ) -> Result<(Self::ProverParam, Self::VerifierParam), Error>;
 
     fn commit(pp: &Self::ProverParam, poly: &Self::Poly)
         -> Result<Self::CommitmentWithData, Error>;

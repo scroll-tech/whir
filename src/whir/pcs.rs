@@ -72,7 +72,7 @@ where
 
         let mut merlin = io.to_merlin();
         let committer = Committer::new(pp.clone());
-        let witness = committer.commit(&mut merlin, poly.clone()).unwrap();
+        let witness = committer.commit(&mut merlin, poly.clone())?;
         Ok(witness)
     }
 
@@ -91,6 +91,11 @@ where
         _eval: &E,
         _transcript: &mut Self::Transcript,
     ) -> Result<Self::Proof, Error> {
+        //        let prover = Prover(params.clone());
+        //
+        //        let proof = prover
+        //            .prove(&mut merlin, Statement::default(), witness)
+        //            .unwrap();
         todo!()
     }
 

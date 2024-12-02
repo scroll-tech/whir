@@ -14,7 +14,7 @@ use crate::whir::{
 
 use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use nimue::{DefaultHash, IOPattern};
+use nimue::{DefaultHash, IOPattern, Merlin};
 use nimue_pow::blake3::Blake3PoW;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
@@ -33,13 +33,11 @@ where
     E: FftField + CanonicalSerialize + CanonicalDeserialize,
 {
     type Param = WhirPCSConfig<E>;
-    type ProverParam = WhirPCSConfig<E>;
-    type VerifierParam = WhirPCSConfig<E>;
     type CommitmentWithData = Witness<E, MerkleTreeParams<E>>;
     type Proof = WhirProof<MerkleTreeParams<E>, E>;
     // TODO: support both base and extension fields
     type Poly = CoefficientList<E::BasePrimeField>;
-    type Transcript = IOPattern<DefaultHash>;
+    type Transcript = Merlin<DefaultHash>;
 
     fn setup(poly_size: usize) -> Self::Param {
         let mv_params = MultivariateParameters::<E>::new(poly_size);
@@ -64,46 +62,42 @@ where
         WhirConfig::<E, MerkleConfig<E>, PowStrategy>::new(mv_params, whir_params)
     }
 
-    fn commit(
-        pp: &Self::ProverParam,
+    fn commit_and_write(
+        pp: &Self::Param,
         poly: &Self::Poly,
+        transcript: &mut Self::Transcript,
     ) -> Result<Self::CommitmentWithData, Error> {
-        let io = IOPattern::<DefaultHash>::new("🌪️")
-            .commit_statement(&pp)
-            .add_whir_proof(&pp);
-
-        let mut merlin = io.to_merlin();
         let committer = Committer::new(pp.clone());
-        let witness = committer.commit(&mut merlin, poly.clone())?;
+        let witness = committer.commit(transcript, poly.clone())?;
         Ok(witness)
     }
 
     fn batch_commit(
-        _pp: &Self::ProverParam,
+        _pp: &Self::Param,
         _polys: &[Self::Poly],
     ) -> Result<Self::CommitmentWithData, Error> {
         todo!()
     }
 
     fn open(
-        pp: &Self::ProverParam,
+        pp: &Self::Param,
         witness: Self::CommitmentWithData,
         point: &[E],
         eval: &E,
         transcript: &mut Self::Transcript,
     ) -> Result<Self::Proof, Error> {
         let prover = Prover(pp.clone());
-        let mut merlin = transcript.clone().to_merlin();
         let statement = Statement {
             points: vec![MultilinearPoint(point.to_vec())],
             evaluations: vec![eval.clone()],
         };
-        let proof = prover.prove(&mut merlin, statement, witness)?;
+
+        let proof = prover.prove(transcript, statement, witness)?;
         Ok(proof)
     }
 
     fn batch_open(
-        _pp: &Self::ProverParam,
+        _pp: &Self::Param,
         _polys: &[Self::Poly],
         _comm: Self::CommitmentWithData,
         _point: &[E],
@@ -114,16 +108,15 @@ where
     }
 
     fn verify(
-        vp: &Self::VerifierParam,
+        vp: &Self::Param,
         point: &[E],
         eval: &E,
         proof: &Self::Proof,
-        transcript: &mut Self::Transcript,
+        transcript: &Self::Transcript,
     ) -> Result<(), Error> {
         // TODO: determine reps by security bits
         let reps = 1000;
         let verifier = Verifier::new(vp.clone());
-        // TODO: simplify vp, pp
         let io = IOPattern::<DefaultHash>::new("🌪️")
             .commit_statement(&vp)
             .add_whir_proof(&vp);
@@ -133,21 +126,56 @@ where
             evaluations: vec![eval.clone()],
         };
 
-        let merlin = transcript.clone().to_merlin();
         for _ in 0..reps {
-            let mut arthur = io.to_arthur(merlin.transcript());
+            let mut arthur = io.to_arthur(transcript.transcript());
             verifier.verify(&mut arthur, &statement, proof)?;
         }
         Ok(())
     }
 
     fn batch_verify(
-        _vp: &Self::VerifierParam,
+        _vp: &Self::Param,
         _point: &[E],
         _evals: &[E],
         _proof: &Self::Proof,
         _transcript: &mut Self::Transcript,
     ) -> Result<(), Error> {
         todo!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ark_ff::Field;
+    use rand::Rng;
+
+    use super::*;
+    use crate::crypto::fields::Field64_2 as F;
+
+    #[test]
+    fn single_point_verify() {
+        let poly_size = 10;
+        let num_coeffs = 1 << poly_size;
+        let pp = Whir::<F>::setup(poly_size);
+
+        let poly = CoefficientList::new(
+            (0..num_coeffs)
+                .map(<F as Field>::BasePrimeField::from)
+                .collect(),
+        );
+
+        let io = IOPattern::<DefaultHash>::new("🌪️")
+            .commit_statement(&pp)
+            .add_whir_proof(&pp);
+        let mut merlin = io.to_merlin();
+
+        let witness = Whir::<F>::commit_and_write(&pp, &poly, &mut merlin).unwrap();
+
+        let mut rng = rand::thread_rng();
+        let point: Vec<F> = (0..poly_size).map(|_| F::from(rng.gen::<u64>())).collect();
+        let eval = poly.evaluate_at_extension(&MultilinearPoint(point.clone()));
+
+        let proof = Whir::<F>::open(&pp, witness, &point, &eval, &mut merlin).unwrap();
+        Whir::<F>::verify(&pp, &point, &eval, &proof, &merlin).unwrap();
     }
 }

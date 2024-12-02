@@ -60,8 +60,7 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
 
     fn open(
         pp: &Self::ProverParam,
-        poly: &Self::Poly,
-        comm: &Self::CommitmentWithData,
+        comm: Self::CommitmentWithData,
         point: &[E],
         eval: &E,
         transcript: &mut Self::Transcript,
@@ -74,7 +73,7 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
     fn batch_open(
         pp: &Self::ProverParam,
         polys: &[Self::Poly],
-        comm: &Self::CommitmentWithData,
+        comm: Self::CommitmentWithData,
         point: &[E],
         evals: &[E],
         transcript: &mut Self::Transcript,

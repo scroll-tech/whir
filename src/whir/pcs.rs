@@ -2,12 +2,13 @@ use crate::crypto::merkle_tree::blake3::{self as mt, MerkleTreeParams};
 use crate::parameters::{
     default_max_pow, FoldType, MultivariateParameters, SoundnessType, WhirParameters,
 };
-use crate::poly_utils::coeffs::CoefficientList;
+use crate::poly_utils::{coeffs::CoefficientList, MultilinearPoint};
 use crate::whir::{
     committer::{Committer, Witness},
     iopattern::WhirIOPattern,
     parameters::WhirConfig,
-    Error, PolynomialCommitmentScheme, WhirProof,
+    prover::Prover,
+    Error, PolynomialCommitmentScheme, Statement, WhirProof,
 };
 
 use ark_ff::FftField;
@@ -84,25 +85,26 @@ where
     }
 
     fn open(
-        _pp: &Self::ProverParam,
-        _poly: &Self::Poly,
-        _comm: &Self::CommitmentWithData,
-        _point: &[E],
-        _eval: &E,
-        _transcript: &mut Self::Transcript,
+        pp: &Self::ProverParam,
+        witness: Self::CommitmentWithData,
+        point: &[E],
+        eval: &E,
+        transcript: &mut Self::Transcript,
     ) -> Result<Self::Proof, Error> {
-        //        let prover = Prover(params.clone());
-        //
-        //        let proof = prover
-        //            .prove(&mut merlin, Statement::default(), witness)
-        //            .unwrap();
-        todo!()
+        let prover = Prover(pp.clone());
+        let mut merlin = transcript.clone().to_merlin();
+        let statement = Statement {
+            points: vec![MultilinearPoint(point.to_vec())],
+            evaluations: vec![eval.clone()],
+        };
+        let proof = prover.prove(&mut merlin, statement, witness)?;
+        Ok(proof)
     }
 
     fn batch_open(
         _pp: &Self::ProverParam,
         _polys: &[Self::Poly],
-        _comm: &Self::CommitmentWithData,
+        _comm: Self::CommitmentWithData,
         _point: &[E],
         _evals: &[E],
         _transcript: &mut Self::Transcript,

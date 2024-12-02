@@ -8,6 +8,7 @@ use crate::whir::{
     iopattern::WhirIOPattern,
     parameters::WhirConfig,
     prover::Prover,
+    verifier::Verifier,
     Error, PolynomialCommitmentScheme, Statement, WhirProof,
 };
 
@@ -113,13 +114,31 @@ where
     }
 
     fn verify(
-        _vp: &Self::VerifierParam,
-        _point: &[E],
-        _eval: &E,
-        _proof: &Self::Proof,
-        _transcript: &mut Self::Transcript,
+        vp: &Self::VerifierParam,
+        point: &[E],
+        eval: &E,
+        proof: &Self::Proof,
+        transcript: &mut Self::Transcript,
     ) -> Result<(), Error> {
-        todo!()
+        // TODO: determine reps by security bits
+        let reps = 1000;
+        let verifier = Verifier::new(vp.clone());
+        // TODO: simplify vp, pp
+        let io = IOPattern::<DefaultHash>::new("🌪️")
+            .commit_statement(&vp)
+            .add_whir_proof(&vp);
+
+        let statement = Statement {
+            points: vec![MultilinearPoint(point.to_vec())],
+            evaluations: vec![eval.clone()],
+        };
+
+        let merlin = transcript.clone().to_merlin();
+        for _ in 0..reps {
+            let mut arthur = io.to_arthur(merlin.transcript());
+            verifier.verify(&mut arthur, &statement, proof)?;
+        }
+        Ok(())
     }
 
     fn batch_verify(

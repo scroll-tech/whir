@@ -4,7 +4,10 @@ use crate::parameters::{
 };
 use crate::poly_utils::coeffs::CoefficientList;
 use crate::whir::{
-    committer::Witness, parameters::WhirConfig, Error, PolynomialCommitmentScheme, WhirProof,
+    committer::{Committer, Witness},
+    iopattern::WhirIOPattern,
+    parameters::WhirConfig,
+    Error, PolynomialCommitmentScheme, WhirProof,
 };
 
 use ark_ff::FftField;
@@ -32,7 +35,8 @@ where
     type VerifierParam = WhirPCSConfig<E>;
     type CommitmentWithData = Witness<E, MerkleTreeParams<E>>;
     type Proof = WhirProof<MerkleTreeParams<E>, E>;
-    type Poly = CoefficientList<E>;
+    // TODO: support both base and extension fields
+    type Poly = CoefficientList<E::BasePrimeField>;
     type Transcript = IOPattern<DefaultHash>;
 
     fn setup(poly_size: usize) -> Self::Param {
@@ -59,10 +63,17 @@ where
     }
 
     fn commit(
-        _pp: &Self::ProverParam,
-        _poly: &Self::Poly,
+        pp: &Self::ProverParam,
+        poly: &Self::Poly,
     ) -> Result<Self::CommitmentWithData, Error> {
-        todo!()
+        let io = IOPattern::<DefaultHash>::new("🌪️")
+            .commit_statement(&pp)
+            .add_whir_proof(&pp);
+
+        let mut merlin = io.to_merlin();
+        let committer = Committer::new(pp.clone());
+        let witness = committer.commit(&mut merlin, poly.clone()).unwrap();
+        Ok(witness)
     }
 
     fn batch_commit(

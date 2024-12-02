@@ -31,8 +31,7 @@ rayon = { version = "1.10.0", optional = true }
 debug = true
 
 [features]
-default = ["parallel"]
-#default = []
+default = ["parallel", "ceno"]
 parallel = [
     "dep:rayon",
     "ark-poly/parallel",
@@ -40,5 +39,4 @@ parallel = [
     "ark-crypto-primitives/parallel",
 ]
 rayon = ["dep:rayon"]
-
-
+ceno = []

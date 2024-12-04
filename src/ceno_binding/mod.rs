@@ -1,5 +1,6 @@
 mod error;
 mod pcs;
+mod pow;
 
 use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};

@@ -1,24 +1,30 @@
 use super::error::Error;
 use super::PolynomialCommitmentScheme;
 use crate::crypto::merkle_tree::blake3::{CompressH, MerkleTreeParams};
+use crate::parameters::{MultivariateParameters, WhirParameters};
 use crate::whir::committer::Witness;
 use crate::whir::parameters::WhirConfig;
 use crate::whir::WhirProof;
 
 use ark_crypto_primitives::crh::TwoToOneCRHScheme;
+use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_std::log2;
+use nimue_pow::PowStrategy;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
 #[derive(Debug, Clone)]
-pub struct Whir<E>(PhantomData<E>);
+pub struct Whir<E, MerkleConfig>(PhantomData<(E, MerkleConfig)>);
 
 type WhirPCSConfig<E> = WhirConfig<E, MerkleTreeParams<E>, ()>;
 
-impl<E> PolynomialCommitmentScheme<E> for Whir<E>
+impl<E, MerkleConfig> PolynomialCommitmentScheme<E> for Whir<E, MerkleConfig>
 where
     E: FftField + CanonicalSerialize + CanonicalDeserialize,
+    MerkleConfig: Config<Leaf = [E]> + Clone,
+    MerkleConfig::InnerDigest: AsRef<[u8]> + From<[u8; 32]>,
 {
     type Param = WhirPCSConfig<E>;
     type ProverParam = WhirPCSConfig<E>;
@@ -30,8 +36,28 @@ where
     type Poly = ();
     type Transcript = ();
 
-    fn setup(_poly_size: usize) -> Result<Self::Param, Error> {
-        todo!()
+    fn setup(poly_size: usize) -> Result<Self::Param, Error> {
+        let num_variables = log2(poly_size) as usize;
+        let num_coeffs = 1 << num_variables;
+
+        let mv_params = MultivariateParameters::<E>::new(num_variables);
+
+        let whir_params = WhirParameters::<MerkleConfig, PowStrategy> {
+            initial_statement: true,
+            security_level,
+            pow_bits,
+            folding_factor,
+            leaf_hash_params,
+            two_to_one_params,
+            soundness_type,
+            fold_optimisation,
+            _pow_parameters: Default::default(),
+            starting_log_inv_rate: starting_rate,
+        };
+
+        let params = WhirConfig::<F, MerkleConfig, PowStrategy>::new(mv_params, whir_params);
+
+        Ok(params)
     }
 
     fn commit(

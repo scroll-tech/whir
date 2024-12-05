@@ -1,15 +1,14 @@
 use ark_crypto_primitives::merkle_tree::{Config, MultiPath};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use std::fmt::Debug;
 
 use crate::poly_utils::MultilinearPoint;
 
 pub mod committer;
-mod fs_utils;
 pub mod iopattern;
 pub mod parameters;
 pub mod prover;
 pub mod verifier;
+pub mod fs_utils;
 
 #[derive(Debug, Clone, Default)]
 pub struct Statement<F> {
@@ -18,7 +17,7 @@ pub struct Statement<F> {
 }
 
 // Only includes the authentication paths
-#[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
+#[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct WhirProof<MerkleConfig, F>(Vec<(MultiPath<MerkleConfig>, Vec<Vec<F>>)>)
 where
     MerkleConfig: Config<Leaf = [F]>,

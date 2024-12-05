@@ -1,4 +1,4 @@
-use super::{error::Error, PolynomialCommitmentScheme};
+use super::{Error, PolynomialCommitmentScheme};
 use crate::crypto::merkle_tree::blake3::{self as mt, MerkleTreeParams};
 use crate::parameters::{
     default_max_pow, FoldType, MultivariateParameters, SoundnessType, WhirParameters,

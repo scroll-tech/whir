@@ -1,10 +1,14 @@
-mod error;
 mod pcs;
 
 use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use std::fmt::Debug;
 
-pub use error::Error;
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    ProofError(#[from] nimue::ProofError),
+}
 
 pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
     type Param: Clone;

@@ -1,7 +1,6 @@
 use ark_crypto_primitives::merkle_tree::{Config, MultiPath};
 use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-// use goldilocks::ExtensionField;
 use std::fmt::Debug;
 
 use crate::errors::Error;

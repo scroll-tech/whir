@@ -4,8 +4,8 @@ use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::FftField;
 use ark_poly::EvaluationDomain;
 use nimue::{
-    plugins::ark::{FieldChallenges, FieldReader},
-    ByteChallenges, ByteReader, ProofError, ProofResult,
+    plugins::ark::{FieldChallenges, FieldReader}
+    , ByteChallenges, ByteReader, ProofError, ProofResult,
 };
 use nimue_pow::{self, PoWChallenge};
 
@@ -28,14 +28,14 @@ where
 }
 
 #[derive(Clone)]
-pub struct ParsedCommitment<F, D> {
+struct ParsedCommitment<F, D> {
     root: D,
     ood_points: Vec<F>,
     ood_answers: Vec<F>,
 }
 
 #[derive(Clone)]
-pub struct ParsedProof<F> {
+struct ParsedProof<F> {
     initial_combination_randomness: Vec<F>,
     initial_sumcheck_rounds: Vec<(SumcheckPolynomial<F>, F)>,
     rounds: Vec<ParsedRound<F>>,

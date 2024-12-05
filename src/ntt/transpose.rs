@@ -85,7 +85,10 @@ fn transpose_copy_parallel<F: Sized + Copy + Send>(
 
 /// Sets `dst` to the transpose of `src`. This will panic if the sizes of `src` and `dst` are not compatible.
 /// This is the non-parallel version
-fn transpose_copy_not_parallel<F: Sized + Copy>(src: MatrixMut<'_, F>, mut dst: MatrixMut<'_, F>) {
+fn transpose_copy_not_parallel<F: Sized + Copy>(
+    src: MatrixMut<'_, F>,
+    mut dst: MatrixMut<'_, F>,
+) {
     assert_eq!(src.rows(), dst.cols());
     assert_eq!(src.cols(), dst.rows());
     if src.rows() * src.cols() > workload_size::<F>() {

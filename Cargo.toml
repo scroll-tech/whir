@@ -34,8 +34,7 @@ thiserror = "1"
 debug = true
 
 [features]
-default = ["parallel"]
-#default = []
+default = ["parallel", "ceno"]
 parallel = [
     "dep:rayon",
     "ark-poly/parallel",
@@ -43,5 +42,4 @@ parallel = [
     "ark-crypto-primitives/parallel",
 ]
 rayon = ["dep:rayon"]
-
-
+ceno = []

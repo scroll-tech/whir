@@ -1,3 +1,4 @@
+use super::{error::Error, PolynomialCommitmentScheme};
 use crate::crypto::merkle_tree::blake3::{self as mt, MerkleTreeParams};
 use crate::parameters::{
     default_max_pow, FoldType, MultivariateParameters, SoundnessType, WhirParameters,
@@ -9,7 +10,7 @@ use crate::whir::{
     parameters::WhirConfig,
     prover::Prover,
     verifier::Verifier,
-    Error, PolynomialCommitmentScheme, Statement, WhirProof,
+    Statement, WhirProof,
 };
 
 use ark_ff::FftField;

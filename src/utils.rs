@@ -1,5 +1,7 @@
 use crate::ntt::transpose;
 use ark_ff::Field;
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 use std::collections::BTreeSet;
 
 // checks whether the given number n is a power of two.
@@ -86,11 +88,13 @@ pub fn stack_evaluations<F: Field>(mut evals: Vec<F>, folding_factor: usize) -> 
 /// Takes the vector of evaluations (assume that evals[i] = f(omega^i))
 /// and folds them into a vector of such that folded_evals[i] = [f(omega^(i + k * j)) for j in 0..folding_factor]
 /// This function will mutate the function without return
-pub fn stack_evaluations_mut<F: Field>(evals: &mut [F], fold_size: usize) {
-    let size_of_new_domain = evals.len() / fold_size;
+pub fn stack_evaluations_mut<F: Field>(evals: &mut [F], folding_factor: usize) {
+    let folding_factor_exp = 1 << folding_factor;
+    assert!(evals.len() % folding_factor_exp == 0);
+    let size_of_new_domain = evals.len() / folding_factor_exp;
 
     // interpret evals as (folding_factor_exp x size_of_new_domain)-matrix and transpose in-place
-    transpose(evals, fold_size, size_of_new_domain);
+    transpose(evals, folding_factor_exp, size_of_new_domain);
 }
 
 /// Takes a vector of matrix and stacking them horizontally
@@ -101,12 +105,15 @@ pub fn horizontal_stacking<F: Field>(
     folding_factor: usize,
 ) -> Vec<F> {
     let fold_size = 1 << folding_factor;
-    let domain_size_log2 = domain_size.ilog2() as usize;
     let num_polys: usize = evals.len() / domain_size;
+    let num_polys_log2: usize = num_polys.ilog2() as usize;
 
-    let mut evals = stack_evaluations(evals, domain_size_log2);
+    let mut evals = stack_evaluations(evals, num_polys_log2);
+    #[cfg(not(feature = "parallel"))]
     let stacked_evals = evals.chunks_exact_mut(fold_size * num_polys);
-    stacked_evals.for_each(|eval| stack_evaluations_mut(eval, num_polys));
+    #[cfg(feature = "parallel")]
+    let stacked_evals = evals.par_chunks_exact_mut(fold_size * num_polys);
+    stacked_evals.for_each(|eval| stack_evaluations_mut(eval, folding_factor));
     evals
 }
 
@@ -114,7 +121,31 @@ pub fn horizontal_stacking<F: Field>(
 mod tests {
     use crate::utils::base_decomposition;
 
-    use super::{is_power_of_two, stack_evaluations, to_binary};
+    use super::{horizontal_stacking, is_power_of_two, stack_evaluations, to_binary};
+
+    #[test]
+    fn test_horizontal_stacking() {
+        use crate::crypto::fields::Field64 as F;
+
+        let num = 256;
+        let domain_size = 128;
+        let folding_factor = 3;
+        let fold_size = 1 << folding_factor;
+        assert_eq!(num % fold_size, 0);
+        let evals: Vec<_> = (0..num as u64).map(F::from).collect();
+
+        let stacked = horizontal_stacking(evals, domain_size, folding_factor);
+        assert_eq!(stacked.len(), num);
+
+        for (i, fold) in stacked.chunks_exact(fold_size).enumerate() {
+            assert_eq!(fold.len(), fold_size);
+            let offset = if i % 2 == 0 { 0 } else { domain_size };
+            let row_id = i / 2;
+            for j in 0..fold_size {
+                assert_eq!(fold[j], F::from((offset + row_id * fold_size + j) as u64));
+            }
+        }
+    }
 
     #[test]
     fn test_evaluations_stack() {

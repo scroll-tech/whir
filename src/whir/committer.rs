@@ -189,9 +189,9 @@ where
         // Group folds together as a leaf.
         let fold_size = 1 << self.0.folding_factor;
         #[cfg(not(feature = "parallel"))]
-        let leafs_iter = folded_evals.chunks_exact(fold_size * base_domain.size());
+        let leafs_iter = folded_evals.chunks_exact(fold_size * polys.len());
         #[cfg(feature = "parallel")]
-        let leafs_iter = folded_evals.par_chunks_exact(fold_size * base_domain.size());
+        let leafs_iter = folded_evals.par_chunks_exact(fold_size * polys.len());
 
         let merkle_tree = MerkleTree::<MerkleConfig>::new(
             &self.0.leaf_hash_params,
@@ -207,8 +207,8 @@ where
         let mut ood_points = vec![F::ZERO; self.0.committment_ood_samples];
         let mut ood_answers = vec![Vec::with_capacity(self.0.committment_ood_samples); polys.len()];
         if self.0.committment_ood_samples > 0 {
+            merlin.fill_challenge_scalars(&mut ood_points)?;
             for i in 0..polys.len() {
-                merlin.fill_challenge_scalars(&mut ood_points)?;
                 ood_answers[i].extend(ood_points.iter().map(|ood_point| {
                     polys[i].evaluate_at_extension(&MultilinearPoint::expand_from_univariate(
                         *ood_point,

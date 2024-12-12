@@ -162,6 +162,8 @@ where
             .map(|poly| expand_from_coeff(poly.coeffs(), expansion))
             .collect::<Vec<Vec<_>>>();
 
+        assert_eq!(base_domain.size(), evals[0].len());
+
         let folded_evals = evals
             .into_iter()
             .map(|evals| utils::stack_evaluations(evals, self.0.folding_factor))
@@ -174,14 +176,15 @@ where
                     self.0.folding_factor,
                 )
             })
-            .map(|evals| {
+            .flat_map(|evals| {
                 evals
                     .into_iter()
                     .map(F::from_base_prime_field)
                     .collect::<Vec<_>>()
             })
-            .collect::<Vec<Vec<_>>>();
-        let folded_evals = utils::horizontal_stacking(folded_evals, self.0.folding_factor);
+            .collect::<Vec<_>>();
+        let folded_evals =
+            utils::horizontal_stacking(folded_evals, base_domain.size(), self.0.folding_factor);
 
         // Group folds together as a leaf.
         let fold_size = 1 << self.0.folding_factor;

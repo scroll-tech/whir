@@ -73,6 +73,12 @@ where
         Ok(witness.into())
     }
 
+    // Assumption:
+    // 1. there must be at least one polynomial
+    // 2. all polynomials are in base field
+    // (TODO: this assumption is from the whir implementation,
+    // if we are going to support extension field, need modify whir's implementation)
+    // 3. all polynomials must have the same number of variables
     fn batch_commit_and_write(
         pp: &Self::Param,
         polys: &[Self::Poly],

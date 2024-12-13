@@ -82,6 +82,8 @@ struct BenchmarkOutput {
     whir_argument_size: usize,
     whir_prover_time: Duration,
     whir_prover_hashes: usize,
+    whir_committer_time: Duration,
+    whir_committer_hashes: usize,
     whir_verifier_time: Duration,
     whir_verifier_hashes: usize,
 
@@ -89,6 +91,8 @@ struct BenchmarkOutput {
     whir_ldt_argument_size: usize,
     whir_ldt_prover_time: Duration,
     whir_ldt_prover_hashes: usize,
+    whir_ldt_committer_time: Duration,
+    whir_ldt_committer_hashes: usize,
     whir_ldt_verifier_time: Duration,
     whir_ldt_verifier_hashes: usize,
 }
@@ -252,8 +256,10 @@ fn run_whir<F, MerkleConfig>(
     );
 
     let (
-        whir_ldt_prover_time,
         whir_ldt_argument_size,
+        whir_ldt_committer_time,
+        whir_ldt_committer_hashes,
+        whir_ldt_prover_time,
         whir_ldt_prover_hashes,
         whir_ldt_verifier_time,
         whir_ldt_verifier_hashes,
@@ -281,19 +287,23 @@ fn run_whir<F, MerkleConfig>(
 
         let mut merlin = io.to_merlin();
 
-        let whir_ldt_prover_time = Instant::now();
+        let committer_start_time = Instant::now();
 
         HashCounter::reset();
 
         let committer = Committer::new(params.clone());
         let witness = committer.commit(&mut merlin, polynomial.clone()).unwrap();
+        let whir_ldt_committer_hash_count = HashCounter::get();
+        let whir_ldt_committer_time = committer_start_time.elapsed();
 
+        HashCounter::reset();
+
+        let whir_ldt_prover_time = Instant::now();
         let prover = Prover(params.clone());
 
         let proof = prover
             .prove(&mut merlin, Statement::default(), witness)
             .unwrap();
-
         let whir_ldt_prover_time = whir_ldt_prover_time.elapsed();
         let whir_ldt_argument_size = whir_proof_size(merlin.transcript(), &proof);
         let whir_ldt_prover_hashes = HashCounter::get();
@@ -314,8 +324,10 @@ fn run_whir<F, MerkleConfig>(
         let whir_ldt_verifier_hashes = HashCounter::get() / reps;
 
         (
-            whir_ldt_prover_time,
             whir_ldt_argument_size,
+            whir_ldt_committer_time,
+            whir_ldt_committer_hash_count,
+            whir_ldt_prover_time,
             whir_ldt_prover_hashes,
             whir_ldt_verifier_time,
             whir_ldt_verifier_hashes,
@@ -323,8 +335,10 @@ fn run_whir<F, MerkleConfig>(
     };
 
     let (
-        whir_prover_time,
         whir_argument_size,
+        whir_committer_time,
+        whir_committer_hashes,
+        whir_prover_time,
         whir_prover_hashes,
         whir_verifier_time,
         whir_verifier_hashes,
@@ -361,17 +375,21 @@ fn run_whir<F, MerkleConfig>(
         };
 
         HashCounter::reset();
-        let whir_prover_time = Instant::now();
+        let committer_start_time = Instant::now();
 
         let committer = Committer::new(params.clone());
         let witness = committer.commit(&mut merlin, polynomial.clone()).unwrap();
+        let whir_committer_duration = committer_start_time.elapsed();
+        let whir_committer_hash_count = HashCounter::get();
 
+        HashCounter::reset();
+
+        let whir_prover_time = Instant::now();
         let prover = Prover(params.clone());
 
         let proof = prover
             .prove(&mut merlin, statement.clone(), witness)
             .unwrap();
-
         let whir_prover_time = whir_prover_time.elapsed();
         let whir_argument_size = whir_proof_size(merlin.transcript(), &proof);
         let whir_prover_hashes = HashCounter::get();
@@ -390,8 +408,10 @@ fn run_whir<F, MerkleConfig>(
         let whir_verifier_hashes = HashCounter::get() / reps;
 
         (
-            whir_prover_time,
             whir_argument_size,
+            whir_committer_duration,
+            whir_committer_hash_count,
+            whir_prover_time,
             whir_prover_hashes,
             whir_verifier_time,
             whir_verifier_hashes,
@@ -411,16 +431,20 @@ fn run_whir<F, MerkleConfig>(
 
         // Whir
         whir_evaluations: args.num_evaluations,
-        whir_prover_time,
         whir_argument_size,
+        whir_prover_time,
         whir_prover_hashes,
+        whir_committer_time,
+        whir_committer_hashes,
         whir_verifier_time,
         whir_verifier_hashes,
 
         // Whir LDT
-        whir_ldt_prover_time,
         whir_ldt_argument_size,
+        whir_ldt_prover_time,
         whir_ldt_prover_hashes,
+        whir_ldt_committer_time,
+        whir_ldt_committer_hashes,
         whir_ldt_verifier_time,
         whir_ldt_verifier_hashes,
     };

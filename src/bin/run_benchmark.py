@@ -45,16 +45,17 @@ def main():
         # Read the output from the JSON file
         output_data = read_benchmark_output()
         proving_time = convert_prover_time(output_data.get('whir_prover_time'))
+        committing_time = convert_prover_time(output_data.get('whir_committer_time'))
         verification_hashes = output_data.get('whir_verifier_hashes')
         proof_size = output_data.get('whir_argument_size')
 
         # Store results
-        results.append((count, proving_time, verification_hashes, proof_size))
+        results.append((count, committing_time, proving_time, verification_hashes, proof_size))
 
     # Print results
-    print(f"{'Variables':<10} {'Proving Time (ms)':<20} {'Verification Hashes':<40} {'Proof Size':<15}")
-    for count, proving_time, verification_hashes, proof_size in results:
-        print(f"{count:<10} {proving_time:<20.2f} {verification_hashes:<40} {proof_size:<15}")
+    print(f"{'Variables':<10} {'Committing Time (ms)':<20} {'Proving Time (ms)':<20} {'Verification Hashes':<40} {'Proof Size':<15}")
+    for count, committing_time, proving_time, verification_hashes, proof_size in results:
+        print(f"{count:<10} {committing_time:<20.2f} {proving_time:<20.2f} {verification_hashes:<40} {proof_size:<15}")
 
 if __name__ == '__main__':
     print(f"Benchmark run at: {datetime.datetime.now()}")

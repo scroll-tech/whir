@@ -33,6 +33,39 @@ where
         self.num_variables
     }
 
+    fn coeff_at(&self, index: usize) -> F {
+        self.coeffs[index]
+    }
+
+    pub fn combine(polys: Vec<Self>, coeffs: Vec<F>) -> Self {
+        assert!(!polys.is_empty(), "Input polys cannot be empty");
+        assert_eq!(
+            polys.len(),
+            coeffs.len(),
+            "Mismatch between polys and coeffs length"
+        );
+        polys.iter().skip(1).for_each(|poly| {
+            assert_eq!(
+                poly.num_vars(),
+                polys[0].num_vars(),
+                "All polys must have the same number of variables"
+            );
+        });
+
+        let mut combined_coeffs = vec![F::ZERO; polys[0].coeffs.len()];
+        polys.iter().for_each(|poly| {
+            for i in 0..combined_coeffs.len() {
+                combined_coeffs[i] += poly.coeff_at(i);
+            }
+        });
+
+        // Create the new combined Poly
+        Self {
+            coeffs: combined_coeffs,
+            num_variables: polys[0].num_vars(), // Assuming all polys have the same number of variables
+        }
+    }
+
     /// Evaluate the given polynomial at `point` from {0,1}^n
     pub fn evaluate_hypercube(&self, point: BinaryHypercubePoint) -> F {
         assert_eq!(self.coeffs.len(), 1 << self.num_variables);

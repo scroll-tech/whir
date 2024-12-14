@@ -1098,6 +1098,7 @@ dependencies = [
  "clap",
  "derivative",
  "goldilocks",
+ "itertools 0.13.0",
  "lazy_static",
  "nimue",
  "nimue-pow",

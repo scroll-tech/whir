@@ -19,7 +19,6 @@ use crate::{
 use ark_crypto_primitives::merkle_tree::{Config, MerkleTree, MultiPath};
 use ark_ff::FftField;
 use ark_poly::EvaluationDomain;
-use ark_std::iterable::Iterable;
 use itertools::zip_eq;
 use nimue::{
     plugins::ark::{FieldChallenges, FieldWriter},
@@ -98,7 +97,7 @@ where
         let compute_dot_product = |evals: &[F], coeff: &[F]| -> F {
             // Ensure lengths match and compute the dot product
             zip_eq(evals, coeff)
-                .map(|(a, b)| a * b) // Element-wise multiplication
+                .map(|(a, b)| *a * *b) // Element-wise multiplication
                 .sum() // Sum the products
         };
 
@@ -136,9 +135,7 @@ where
             );
         }
 
-        //        let combined_coeff = witness.polys.iter().map(|poly|{
-        //            compute_dot_product(poly)
-        //        })
+        let polynomial = CoefficientList::combine(witness.polys, random_coeff);
 
         let mut sumcheck_prover = None;
         let folding_randomness = if self.0.initial_statement {
@@ -147,7 +144,7 @@ where
                 expand_randomness(combination_randomness_gen, initial_claims.len());
 
             sumcheck_prover = Some(SumcheckProverNotSkipping::new(
-                witness.polynomial.clone(),
+                polynomial.clone(),
                 &initial_claims,
                 &combination_randomness,
                 &initial_answers,
@@ -176,7 +173,7 @@ where
             round: 0,
             sumcheck_prover,
             folding_randomness,
-            coefficients: witness.polynomial,
+            coefficients: polynomial,
             prev_merkle: witness.merkle_tree,
             prev_merkle_answers: witness.merkle_leaves,
             merkle_proofs: vec![],

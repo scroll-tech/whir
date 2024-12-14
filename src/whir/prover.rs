@@ -19,6 +19,7 @@ use crate::{
 use ark_crypto_primitives::merkle_tree::{Config, MerkleTree, MultiPath};
 use ark_ff::FftField;
 use ark_poly::EvaluationDomain;
+use ark_std::iterable::Iterable;
 use itertools::zip_eq;
 use nimue::{
     plugins::ark::{FieldChallenges, FieldWriter},
@@ -71,8 +72,23 @@ where
         witness.polynomial.num_variables() == self.0.mv_parameters.num_variables
     }
 
-    fn validate_witnesses(&self, _witnesses: &Witnesses<F, MerkleConfig>) -> bool {
-        todo!()
+    fn validate_witnesses(&self, witness: &Witnesses<F, MerkleConfig>) -> bool {
+        assert_eq!(
+            witness.ood_points.len() * witness.polys.len(),
+            witness.ood_answers.len()
+        );
+        if !self.0.initial_statement {
+            assert!(witness.ood_points.is_empty());
+        }
+        assert!(!witness.polys.is_empty(), "Input polys cannot be empty");
+        witness.polys.iter().skip(1).for_each(|poly| {
+            assert_eq!(
+                poly.num_variables(),
+                witness.polys[0].num_variables(),
+                "All polys must have the same number of variables"
+            );
+        });
+        witness.polys[0].num_variables() == self.0.mv_parameters.num_variables
     }
 
     /// batch open a single point for multiple polys

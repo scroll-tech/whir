@@ -89,7 +89,7 @@ where
         }
 
         for i in 1..polys.len() {
-            if polys[i].num_vars() != polys[0].num_vars() {
+            if polys[i].num_variables() != polys[0].num_variables() {
                 return Err(Error::InvalidPcsParam);
             }
         }

@@ -14,7 +14,7 @@ pub enum Error {
 
 pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
     type Param: Clone;
-    type CommitmentWithData;
+    type CommitmentWithWitness;
     type Proof: Clone + CanonicalSerialize + CanonicalDeserialize;
     type Poly: Clone;
     type Transcript;
@@ -25,17 +25,17 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
         pp: &Self::Param,
         poly: &Self::Poly,
         transcript: &mut Self::Transcript,
-    ) -> Result<Self::CommitmentWithData, Error>;
+    ) -> Result<Self::CommitmentWithWitness, Error>;
 
     fn batch_commit_and_write(
         pp: &Self::Param,
         polys: &[Self::Poly],
         transcript: &mut Self::Transcript,
-    ) -> Result<Self::CommitmentWithData, Error>;
+    ) -> Result<Self::CommitmentWithWitness, Error>;
 
     fn open(
         pp: &Self::Param,
-        comm: Self::CommitmentWithData,
+        comm: Self::CommitmentWithWitness,
         point: &[E],
         eval: &E,
         transcript: &mut Self::Transcript,
@@ -48,7 +48,7 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
     fn batch_open(
         pp: &Self::Param,
         polys: &[Self::Poly],
-        comm: Self::CommitmentWithData,
+        comm: Self::CommitmentWithWitness,
         point: &[E],
         evals: &[E],
         transcript: &mut Self::Transcript,

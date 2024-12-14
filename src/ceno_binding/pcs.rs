@@ -34,7 +34,7 @@ where
     E: FftField + CanonicalSerialize + CanonicalDeserialize,
 {
     type Param = WhirPCSConfig<E>;
-    type CommitmentWithData = Witnesses<E, MerkleTreeParams<E>>;
+    type CommitmentWithWitness = Witnesses<E, MerkleTreeParams<E>>;
     type Proof = WhirProof<MerkleTreeParams<E>, E>;
     // TODO: support both base and extension fields
     type Poly = CoefficientList<E::BasePrimeField>;
@@ -67,7 +67,7 @@ where
         pp: &Self::Param,
         poly: &Self::Poly,
         transcript: &mut Self::Transcript,
-    ) -> Result<Self::CommitmentWithData, Error> {
+    ) -> Result<Self::CommitmentWithWitness, Error> {
         let committer = Committer::new(pp.clone());
         let witness = committer.commit(transcript, poly.clone())?;
         Ok(witness.into())
@@ -83,7 +83,7 @@ where
         pp: &Self::Param,
         polys: &[Self::Poly],
         transcript: &mut Self::Transcript,
-    ) -> Result<Self::CommitmentWithData, Error> {
+    ) -> Result<Self::CommitmentWithWitness, Error> {
         if polys.is_empty() {
             return Err(Error::InvalidPcsParam);
         }
@@ -101,7 +101,7 @@ where
 
     fn open(
         pp: &Self::Param,
-        witness: Self::CommitmentWithData,
+        witness: Self::CommitmentWithWitness,
         point: &[E],
         eval: &E,
         transcript: &mut Self::Transcript,
@@ -119,7 +119,7 @@ where
     fn batch_open(
         _pp: &Self::Param,
         _polys: &[Self::Poly],
-        _comm: Self::CommitmentWithData,
+        _comm: Self::CommitmentWithWitness,
         _point: &[E],
         _evals: &[E],
         _transcript: &mut Self::Transcript,

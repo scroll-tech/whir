@@ -35,7 +35,7 @@ where
     pub(crate) merkle_tree: MerkleTree<MerkleConfig>,
     pub(crate) merkle_leaves: Vec<F>,
     pub(crate) ood_points: Vec<F>,
-    pub(crate) ood_answers: Vec<Vec<F>>,
+    pub(crate) ood_answers: Vec<F>,
 }
 
 impl<F, MerkleConfig: Config> From<Witness<F, MerkleConfig>> for Witnesses<F, MerkleConfig> {
@@ -45,7 +45,7 @@ impl<F, MerkleConfig: Config> From<Witness<F, MerkleConfig>> for Witnesses<F, Me
             merkle_tree: witness.merkle_tree,
             merkle_leaves: witness.merkle_leaves,
             ood_points: witness.ood_points,
-            ood_answers: vec![witness.ood_answers],
+            ood_answers: witness.ood_answers,
         }
     }
 }
@@ -57,7 +57,7 @@ impl<F: Clone, MerkleConfig: Config> From<Witnesses<F, MerkleConfig>> for Witnes
             merkle_tree: witness.merkle_tree,
             merkle_leaves: witness.merkle_leaves,
             ood_points: witness.ood_points,
-            ood_answers: witness.ood_answers[0].clone(),
+            ood_answers: witness.ood_answers,
         }
     }
 }
@@ -205,19 +205,26 @@ where
         merlin.add_digest(root)?;
 
         let mut ood_points = vec![F::ZERO; self.0.committment_ood_samples];
-        let mut ood_answers = vec![Vec::with_capacity(self.0.committment_ood_samples); polys.len()];
+        let mut ood_answers = vec![F::ZERO; polys.len() * self.0.committment_ood_samples];
         if self.0.committment_ood_samples > 0 {
             merlin.fill_challenge_scalars(&mut ood_points)?;
-            for i in 0..polys.len() {
-                ood_answers[i].extend(ood_points.iter().map(|ood_point| {
-                    polys[i].evaluate_at_extension(&MultilinearPoint::expand_from_univariate(
-                        *ood_point,
-                        self.0.mv_parameters.num_variables,
-                    ))
-                }));
-                merlin.add_scalars(&ood_answers[i])?;
-            }
+            ood_points
+                .iter()
+                .enumerate()
+                .for_each(|(point_index, ood_point)| {
+                    for j in 0..polys.len() {
+                        let eval = polys[j].evaluate_at_extension(
+                            &MultilinearPoint::expand_from_univariate(
+                                *ood_point,
+                                self.0.mv_parameters.num_variables,
+                            ),
+                        );
+                        ood_answers[point_index * polys.len() + j] = eval;
+                    }
+                });
+            merlin.add_scalars(&ood_points);
         }
+
         let polys = polys
             .into_iter()
             .map(|poly| poly.clone().to_extension())

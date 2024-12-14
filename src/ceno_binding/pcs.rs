@@ -116,15 +116,17 @@ where
         Ok(proof)
     }
 
-    fn batch_open(
-        _pp: &Self::Param,
-        _polys: &[Self::Poly],
-        _comm: Self::CommitmentWithWitness,
-        _point: &[E],
-        _evals: &[E],
-        _transcript: &mut Self::Transcript,
+    fn simple_batch_open(
+        pp: &Self::Param,
+        witnesses: Self::CommitmentWithWitness,
+        point: &[E],
+        evals: &[E],
+        transcript: &mut Self::Transcript,
     ) -> Result<Self::Proof, Error> {
-        todo!()
+        assert_eq!(witnesses.polys.len(), evals.len());
+        let prover = Prover(pp.clone());
+        let proof = prover.simple_batch_prove(transcript, point, evals, witnesses)?;
+        Ok(proof)
     }
 
     fn verify(

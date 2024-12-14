@@ -101,7 +101,7 @@ where
                 .sum() // Sum the products
         };
 
-        let random_coeff = utils::generate_random_vector(merlin, witness.ood_answers.len());
+        let random_coeff = utils::generate_random_vector(merlin, witness.ood_answers.len())?;
 
         let initial_claims: Vec<_> = witness
             .ood_points
@@ -127,13 +127,6 @@ where
             .into_iter()
             .chain(std::iter::once(eval))
             .collect();
-
-        if !self.0.initial_statement {
-            assert!(
-                initial_answers.is_empty(),
-                "Can not have initial answers without initial statement"
-            );
-        }
 
         let polynomial = CoefficientList::combine(witness.polys, random_coeff);
 

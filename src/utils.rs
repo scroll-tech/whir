@@ -6,7 +6,7 @@ use ark_ff::FftField;
 use ark_ff::Field;
 use nimue::{
     plugins::ark::{FieldChallenges, FieldWriter},
-    ByteChallenges, ByteWriter,
+    ByteChallenges, ByteWriter, ProofResult,
 };
 use nimue_pow::PoWChallenge;
 
@@ -128,9 +128,12 @@ pub fn horizontal_stacking<F: Field>(
 }
 
 // generate a random vector for batching open/verify
-pub fn generate_random_vector<F, Merlin, MerkleConfig>(_merlin: &mut Merlin, _size: usize) -> Vec<F>
+pub fn generate_random_vector<F, Merlin, MerkleConfig>(
+    merlin: &mut Merlin,
+    size: usize,
+) -> ProofResult<Vec<F>>
 where
-    F: FftField,
+    F: Field,
     MerkleConfig: Config,
     Merlin: FieldChallenges<F>
         + FieldWriter<F>
@@ -139,7 +142,9 @@ where
         + PoWChallenge
         + DigestWriter<MerkleConfig>,
 {
-    todo!()
+    let [gamma] = merlin.challenge_scalars()?;
+    let res = expand_randomness(gamma, size);
+    Ok(res)
 }
 
 #[cfg(test)]

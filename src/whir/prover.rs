@@ -19,7 +19,6 @@ use crate::{
 use ark_crypto_primitives::merkle_tree::{Config, MerkleTree, MultiPath};
 use ark_ff::FftField;
 use ark_poly::EvaluationDomain;
-use ark_std::iterable::Iterable;
 use itertools::zip_eq;
 use nimue::{
     plugins::ark::{FieldChallenges, FieldWriter},
@@ -117,7 +116,8 @@ where
                 .sum() // Sum the products
         };
 
-        let random_coeff = utils::generate_random_vector(merlin, witness.ood_answers.len())?;
+        let random_coeff =
+            utils::generate_random_vector_batch_open(merlin, witness.ood_answers.len())?;
 
         let initial_claims: Vec<_> = witness
             .ood_points

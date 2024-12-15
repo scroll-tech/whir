@@ -1,12 +1,11 @@
 use crate::ntt::transpose;
-use crate::whir::fs_utils::DigestWriter;
+use crate::whir::fs_utils::{DigestReader, DigestWriter};
 
 use ark_crypto_primitives::merkle_tree::Config;
-use ark_ff::FftField;
 use ark_ff::Field;
 use nimue::{
-    plugins::ark::{FieldChallenges, FieldWriter},
-    ByteChallenges, ByteWriter, ProofResult,
+    plugins::ark::{FieldChallenges, FieldReader, FieldWriter},
+    ByteChallenges, ByteReader, ByteWriter, ProofResult,
 };
 use nimue_pow::PoWChallenge;
 
@@ -127,22 +126,32 @@ pub fn horizontal_stacking<F: Field>(
     evals
 }
 
-// generate a random vector for batching open/verify
-pub fn generate_random_vector<F, Merlin, MerkleConfig>(
+// generate a random vector for batching open
+pub fn generate_random_vector_batch_open<F, Merlin, MerkleConfig>(
     merlin: &mut Merlin,
     size: usize,
 ) -> ProofResult<Vec<F>>
 where
     F: Field,
     MerkleConfig: Config,
-    Merlin: FieldChallenges<F>
-        + FieldWriter<F>
-        + ByteChallenges
-        + ByteWriter
-        + PoWChallenge
-        + DigestWriter<MerkleConfig>,
+    Merlin: FieldChallenges<F> + FieldWriter<F> + ByteWriter + DigestWriter<MerkleConfig>,
 {
     let [gamma] = merlin.challenge_scalars()?;
+    let res = expand_randomness(gamma, size);
+    Ok(res)
+}
+
+// generate a random vector for batching verify
+pub fn generate_random_vector_batch_verify<F, Arthur, MerkleConfig>(
+    arthur: &mut Arthur,
+    size: usize,
+) -> ProofResult<Vec<F>>
+where
+    F: Field,
+    MerkleConfig: Config,
+    Arthur: FieldChallenges<F> + FieldReader<F> + ByteReader + DigestReader<MerkleConfig>,
+{
+    let [gamma] = arthur.challenge_scalars()?;
     let res = expand_randomness(gamma, size);
     Ok(res)
 }

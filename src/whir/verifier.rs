@@ -1,3 +1,4 @@
+use itertools::zip_eq;
 use std::iter;
 
 use ark_crypto_primitives::merkle_tree::Config;
@@ -10,12 +11,15 @@ use nimue::{
 use nimue_pow::{self, PoWChallenge};
 
 use super::{parameters::WhirConfig, Statement, WhirProof};
-use crate::whir::fs_utils::{get_challenge_stir_queries, DigestReader};
 use crate::{
     parameters::FoldType,
     poly_utils::{coeffs::CoefficientList, eq_poly_outside, fold::compute_fold, MultilinearPoint},
     sumcheck::proof::SumcheckPolynomial,
     utils::expand_randomness,
+};
+use crate::{
+    utils,
+    whir::fs_utils::{get_challenge_stir_queries, DigestReader},
 };
 
 pub struct Verifier<F, MerkleConfig, PowStrategy>
@@ -82,15 +86,33 @@ where
     where
         Arthur: ByteReader + FieldReader<F> + FieldChallenges<F> + DigestReader<MerkleConfig>,
     {
-        let num_polys = self.params.mv_parameters.num_polys;
         let root = arthur.read_digest()?;
 
+        let num_polys = self.params.mv_parameters.num_polys;
+        let size = self.params.committment_ood_samples * num_polys;
+
         let mut ood_points = vec![F::ZERO; self.params.committment_ood_samples];
-        let mut ood_answers = vec![F::ZERO; self.params.committment_ood_samples * num_polys];
+        let mut raw_ood_answers = vec![F::ZERO; size];
         if self.params.committment_ood_samples > 0 {
             arthur.fill_challenge_scalars(&mut ood_points)?;
-            arthur.fill_next_scalars(&mut ood_answers)?;
+            arthur.fill_next_scalars(&mut raw_ood_answers)?;
         }
+
+        let ood_answers = if num_polys > 1 {
+            let compute_dot_product = |evals: &[F], coeff: &[F]| -> F {
+                // Ensure lengths match and compute the dot product
+                zip_eq(evals, coeff)
+                    .map(|(a, b)| *a * *b) // Element-wise multiplication
+                    .sum() // Sum the products
+            };
+            let random_coeff = utils::generate_random_vector_batch_verify(arthur, size)?;
+            raw_ood_answers
+                .chunks_exact(num_polys)
+                .map(|answer| compute_dot_product(answer, &random_coeff))
+                .collect::<Vec<_>>()
+        } else {
+            raw_ood_answers
+        };
 
         Ok(ParsedCommitment {
             root,

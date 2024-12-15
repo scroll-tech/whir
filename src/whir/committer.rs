@@ -222,7 +222,7 @@ where
                         ood_answers[point_index * polys.len() + j] = eval;
                     }
                 });
-            merlin.add_scalars(&ood_points)?;
+            merlin.add_scalars(&ood_answers)?;
         }
 
         let polys = polys

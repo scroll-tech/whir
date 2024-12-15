@@ -19,7 +19,7 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
     type Poly: Clone;
     type Transcript;
 
-    fn setup(poly_size: usize) -> Self::Param;
+    fn setup(poly_size: usize, num_polys: usize) -> Self::Param;
 
     fn commit_and_write(
         pp: &Self::Param,
@@ -61,7 +61,7 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
         transcript: &Self::Transcript,
     ) -> Result<(), Error>;
 
-    fn batch_verify(
+    fn simple_batch_verify(
         vp: &Self::Param,
         point: &[E],
         evals: &[E],

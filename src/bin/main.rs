@@ -229,7 +229,7 @@ fn run_whir_as_ldt<F, MerkleConfig>(
 
     let num_coeffs = 1 << num_variables;
 
-    let mv_params = MultivariateParameters::<F>::new(num_variables);
+    let mv_params = MultivariateParameters::<F>::new(num_variables, 1);
 
     let whir_params = WhirParameters::<MerkleConfig, PowStrategy> {
         initial_statement: false,
@@ -337,7 +337,7 @@ fn run_whir_pcs<F, MerkleConfig>(
 
     let num_coeffs = 1 << num_variables;
 
-    let mv_params = MultivariateParameters::<F>::new(num_variables);
+    let mv_params = MultivariateParameters::<F>::new(num_variables, 1);
 
     let whir_params = WhirParameters::<MerkleConfig, PowStrategy> {
         initial_statement: true,

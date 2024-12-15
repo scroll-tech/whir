@@ -40,8 +40,8 @@ where
     type Poly = CoefficientList<E::BasePrimeField>;
     type Transcript = Merlin<DefaultHash>;
 
-    fn setup(poly_size: usize) -> Self::Param {
-        let mv_params = MultivariateParameters::<E>::new(poly_size);
+    fn setup(poly_size: usize, num_polys: usize) -> Self::Param {
+        let mv_params = MultivariateParameters::<E>::new(poly_size, num_polys);
         let starting_rate = 1;
         let pow_bits = default_max_pow(poly_size, starting_rate);
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
@@ -155,14 +155,24 @@ where
         Ok(())
     }
 
-    fn batch_verify(
-        _vp: &Self::Param,
-        _point: &[E],
-        _evals: &[E],
-        _proof: &Self::Proof,
-        _transcript: &mut Self::Transcript,
+    fn simple_batch_verify(
+        vp: &Self::Param,
+        point: &[E],
+        evals: &[E],
+        proof: &Self::Proof,
+        transcript: &mut Self::Transcript,
     ) -> Result<(), Error> {
-        todo!()
+        let reps = 1000;
+        let verifier = Verifier::new(vp.clone());
+        let io = IOPattern::<DefaultHash>::new("🌪️")
+            .commit_statement(&vp)
+            .add_whir_proof(&vp);
+
+        for _ in 0..reps {
+            let mut arthur = io.to_arthur(transcript.transcript());
+            verifier.simple_batch_verify(&mut arthur, point, evals, proof)?;
+        }
+        Ok(())
     }
 }
 
@@ -178,7 +188,7 @@ mod tests {
     fn single_point_verify() {
         let poly_size = 10;
         let num_coeffs = 1 << poly_size;
-        let pp = Whir::<F>::setup(poly_size);
+        let pp = Whir::<F>::setup(poly_size, 1);
 
         let poly = CoefficientList::new(
             (0..num_coeffs)

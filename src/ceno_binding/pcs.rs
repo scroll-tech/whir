@@ -4,7 +4,7 @@ use crate::parameters::{
     default_max_pow, FoldType, MultivariateParameters, SoundnessType, WhirParameters,
 };
 use crate::poly_utils::{coeffs::CoefficientList, MultilinearPoint};
-use crate::whir::fs_utils::DigestWriter;
+use crate::whir::fs_utils::{DigestReader, DigestWriter};
 use crate::whir::{
     committer::{Committer, Witness},
     iopattern::WhirIOPattern,
@@ -19,7 +19,7 @@ use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::log2;
 use core::num;
-use nimue::{DefaultHash, IOPattern, Merlin};
+use nimue::{Arthur, DefaultHash, IOPattern, Merlin};
 use nimue_pow::blake3::Blake3PoW;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
@@ -31,13 +31,13 @@ use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 
 type PowStrategy = Blake3PoW;
-type WhirPCSConfig<E> = WhirConfig<E, MerkleTreeParams<E>, PowStrategy>;
+// type WhirPCSConfig<E> = WhirConfig<E, MerkleTreeParams<E>, PowStrategy>;
 
 pub trait WhirSpec<E: FftField>: Clone {
-    type MerkleConfig: Config<Leaf = [E]> + Clone
-    where
-        Merlin: DigestWriter<Self::MerkleConfig>,
-        IOPattern: WhirIOPattern<E, Self::MerkleConfig>;
+    type MerkleConfig: Config<Leaf = [E]> + Clone;
+    // where
+    //     Merlin: DigestWriter<Self::MerkleConfig>,
+    //     IOPattern: WhirIOPattern<E, Self::MerkleConfig>;
     fn get_parameters(num_variables: usize) -> WhirParameters<Self::MerkleConfig, PowStrategy>;
 }
 
@@ -118,6 +118,9 @@ impl<E, Spec: WhirSpec<E>> PolynomialCommitmentScheme<E> for Whir<E, Spec>
 where
     E: FftField + CanonicalSerialize + CanonicalDeserialize + Serialize + DeserializeOwned + Debug,
     E::BasePrimeField: Serialize + DeserializeOwned + Debug,
+    Merlin: DigestWriter<Spec::MerkleConfig>,
+    for<'a> Arthur<'a>: DigestReader<Spec::MerkleConfig>,
+    IOPattern: WhirIOPattern<E, Spec::MerkleConfig>,
 {
     type Param = WhirSetupParams<E>;
     type CommitmentWithWitness = Witness<E, Spec::MerkleConfig>;
@@ -198,7 +201,7 @@ where
         let params = WhirConfig::<E, Spec::MerkleConfig, PowStrategy>::new(mv_params, whir_params);
 
         let reps = 1000;
-        let verifier = Verifier::new(params);
+        let verifier = Verifier::new(params.clone());
         let io = IOPattern::<DefaultHash>::new("🌪️")
             .commit_statement(&params)
             .add_whir_proof(&params);
@@ -243,7 +246,7 @@ mod tests {
     fn single_point_verify() {
         let poly_size = 10;
         let num_coeffs = 1 << poly_size;
-        let pp = Whir::<F>::setup(poly_size);
+        let pp = Whir::<F, WhirDefaultSpec>::setup(poly_size);
 
         let poly = CoefficientList::new(
             (0..num_coeffs)

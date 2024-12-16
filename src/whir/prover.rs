@@ -125,15 +125,10 @@ where
             "number of polynomials not equal number of evaluations"
         );
 
-        let compute_dot_product = |evals: &[F], coeff: &[F]| -> F {
-            // Ensure lengths match and compute the dot product
-            zip_eq(evals, coeff)
-                .map(|(a, b)| *a * *b) // Element-wise multiplication
-                .sum() // Sum the products
-        };
+        let compute_dot_product =
+            |evals: &[F], coeff: &[F]| -> F { zip_eq(evals, coeff).map(|(a, b)| *a * *b).sum() };
 
-        let random_coeff =
-            utils::generate_random_vector_batch_open(merlin, witness.ood_answers.len())?;
+        let random_coeff = utils::generate_random_vector_batch_open(merlin, witness.polys.len())?;
 
         let initial_claims: Vec<_> = witness
             .ood_points

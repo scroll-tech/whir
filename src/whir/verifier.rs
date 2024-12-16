@@ -92,27 +92,11 @@ where
         let size = self.params.committment_ood_samples * num_polys;
 
         let mut ood_points = vec![F::ZERO; self.params.committment_ood_samples];
-        let mut raw_ood_answers = vec![F::ZERO; size];
+        let mut ood_answers = vec![F::ZERO; size];
         if self.params.committment_ood_samples > 0 {
             arthur.fill_challenge_scalars(&mut ood_points)?;
-            arthur.fill_next_scalars(&mut raw_ood_answers)?;
+            arthur.fill_next_scalars(&mut ood_answers)?;
         }
-
-        let ood_answers = if num_polys > 1 {
-            let compute_dot_product = |evals: &[F], coeff: &[F]| -> F {
-                // Ensure lengths match and compute the dot product
-                zip_eq(evals, coeff)
-                    .map(|(a, b)| *a * *b) // Element-wise multiplication
-                    .sum() // Sum the products
-            };
-            let random_coeff = utils::generate_random_vector_batch_verify(arthur, size)?;
-            raw_ood_answers
-                .chunks_exact(num_polys)
-                .map(|answer| compute_dot_product(answer, &random_coeff))
-                .collect::<Vec<_>>()
-        } else {
-            raw_ood_answers
-        };
 
         Ok(ParsedCommitment {
             root,
@@ -506,11 +490,48 @@ where
             + PoWChallenge
             + DigestReader<MerkleConfig>,
     {
-        /*
         // We first do a pass in which we rederive all the FS challenges
         // Then we will check the algebraic part (so to optimise inversions)
         let parsed_commitment = self.parse_commitment(arthur)?;
-        let parsed = self.parse_proof(arthur, &parsed_commitment, statement, whir_proof)?;
+
+        // parse proof
+        let num_polys = self.params.mv_parameters.num_polys;
+        let compute_dot_product =
+            |evals: &[F], coeff: &[F]| -> F { zip_eq(evals, coeff).map(|(a, b)| *a * *b).sum() };
+
+        let random_coeff = utils::generate_random_vector_batch_verify(arthur, num_polys)?;
+
+        let initial_claims: Vec<_> = parsed_commitment
+            .ood_points
+            .clone()
+            .into_iter()
+            .map(|ood_point| {
+                MultilinearPoint::expand_from_univariate(
+                    ood_point,
+                    self.params.mv_parameters.num_variables,
+                )
+            })
+            .chain(std::iter::once(MultilinearPoint(point.to_vec())))
+            .collect();
+
+        let ood_answers = parsed_commitment
+            .ood_answers
+            .clone()
+            .chunks_exact(num_polys)
+            .map(|answer| compute_dot_product(answer, &random_coeff))
+            .collect::<Vec<_>>();
+        let eval = compute_dot_product(evals, &random_coeff);
+
+        let initial_answers: Vec<_> = ood_answers
+            .into_iter()
+            .chain(std::iter::once(eval))
+            .collect();
+
+        let statement = Statement {
+            points: initial_claims,
+            evaluations: initial_answers,
+        };
+        let parsed = self.parse_proof(arthur, &parsed_commitment, &statement, whir_proof)?;
 
         let computed_folds = self.compute_folds(&parsed);
 
@@ -627,7 +648,7 @@ where
         };
 
         // Check the final sumcheck evaluation
-        let evaluation_of_v_poly = self.compute_v_poly(&parsed_commitment, statement, &parsed);
+        let evaluation_of_v_poly = self.compute_v_poly(&parsed_commitment, &statement, &parsed);
 
         if prev_sumcheck_poly_eval
             != evaluation_of_v_poly
@@ -639,8 +660,6 @@ where
         }
 
         Ok(())
-            */
-        todo!()
     }
 
     pub fn verify<Arthur>(

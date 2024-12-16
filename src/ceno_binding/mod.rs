@@ -1,5 +1,6 @@
 mod pcs;
-pub use pcs::{DefaultHash, DigestIO, Whir, WhirDefaultSpec, WhirSpec};
+pub use ark_crypto_primitives::merkle_tree::Config;
+pub use pcs::{DefaultHash, Whir, WhirDefaultSpec, WhirSpec};
 
 use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};

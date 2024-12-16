@@ -14,18 +14,14 @@ use crate::whir::{
     Statement, WhirProof,
 };
 
-use ark_crypto_primitives::merkle_tree::{Config, MerkleTree};
+use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::log2;
-use core::num;
 pub use nimue::{Arthur, DefaultHash, IOPattern, Merlin};
 use nimue_pow::blake3::Blake3PoW;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
-#[cfg(feature = "parallel")]
-use rayon::slice::ParallelSlice;
-use serde::ser::SerializeStruct;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
@@ -115,20 +111,23 @@ where
     }
 }
 
-pub trait DigestIO<E: FftField> = where
-    Self: Config + Sized,
-    Merlin: DigestWriter<Self>,
-    for<'a> Arthur<'a>: DigestReader<Self>,
-    IOPattern: WhirIOPattern<E, Self>;
+impl<MerkleConfig, F> Debug for WhirProofWrapper<MerkleConfig, F>
+where
+    MerkleConfig: Config<Leaf = [F]>,
+    F: Sized + Clone + CanonicalSerialize + CanonicalDeserialize,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str("WhirProofWrapper")
+    }
+}
 
 impl<E, Spec: WhirSpec<E>> PolynomialCommitmentScheme<E> for Whir<E, Spec>
 where
     E: FftField + Serialize + DeserializeOwned + Debug,
     E::BasePrimeField: Serialize + DeserializeOwned + Debug,
-    Spec::MerkleConfig: DigestIO<E>,
-    // Merlin: DigestWriter<Spec::MerkleConfig>,
-    // for<'a> Arthur<'a>: DigestReader<Spec::MerkleConfig>,
-    // IOPattern: WhirIOPattern<E, Spec::MerkleConfig>,
+    Merlin: DigestWriter<Spec::MerkleConfig>,
+    for<'a> Arthur<'a>: DigestReader<Spec::MerkleConfig>,
+    IOPattern: WhirIOPattern<E, Spec::MerkleConfig>,
 {
     type Param = WhirSetupParams<E>;
     type CommitmentWithWitness = Witness<E, Spec::MerkleConfig>;

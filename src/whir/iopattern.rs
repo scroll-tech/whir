@@ -1,6 +1,7 @@
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::FftField;
 use nimue::plugins::ark::*;
+pub use nimue::{Arthur, IOPattern, Merlin};
 
 use crate::{
     fs_utils::{OODIOPattern, WhirPoWIOPattern},

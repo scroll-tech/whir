@@ -19,7 +19,7 @@ use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::log2;
 use core::num;
-use nimue::{Arthur, DefaultHash, IOPattern, Merlin};
+pub use nimue::{Arthur, DefaultHash, IOPattern, Merlin};
 use nimue_pow::blake3::Blake3PoW;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
@@ -37,6 +37,7 @@ pub trait WhirSpec<E: FftField>: Clone {
     type MerkleConfig: Config<Leaf = [E]> + Clone;
     // where
     //     Merlin: DigestWriter<Self::MerkleConfig>,
+    //     for<'a> Arthur<'a>: DigestReader<Self::MerkleConfig>,
     //     IOPattern: WhirIOPattern<E, Self::MerkleConfig>;
     fn get_parameters(num_variables: usize) -> WhirParameters<Self::MerkleConfig, PowStrategy>;
 }
@@ -114,13 +115,20 @@ where
     }
 }
 
+pub trait DigestIO<E: FftField> = where
+    Self: Config + Sized,
+    Merlin: DigestWriter<Self>,
+    for<'a> Arthur<'a>: DigestReader<Self>,
+    IOPattern: WhirIOPattern<E, Self>;
+
 impl<E, Spec: WhirSpec<E>> PolynomialCommitmentScheme<E> for Whir<E, Spec>
 where
-    E: FftField + CanonicalSerialize + CanonicalDeserialize + Serialize + DeserializeOwned + Debug,
+    E: FftField + Serialize + DeserializeOwned + Debug,
     E::BasePrimeField: Serialize + DeserializeOwned + Debug,
-    Merlin: DigestWriter<Spec::MerkleConfig>,
-    for<'a> Arthur<'a>: DigestReader<Spec::MerkleConfig>,
-    IOPattern: WhirIOPattern<E, Spec::MerkleConfig>,
+    Spec::MerkleConfig: DigestIO<E>,
+    // Merlin: DigestWriter<Spec::MerkleConfig>,
+    // for<'a> Arthur<'a>: DigestReader<Spec::MerkleConfig>,
+    // IOPattern: WhirIOPattern<E, Spec::MerkleConfig>,
 {
     type Param = WhirSetupParams<E>;
     type CommitmentWithWitness = Witness<E, Spec::MerkleConfig>;
@@ -226,46 +234,5 @@ where
         _transcript: &mut Self::Transcript,
     ) -> Result<(), Error> {
         todo!()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use ark_ff::{Field, Fp2, MontBackend, MontConfig};
-    use rand::Rng;
-
-    use crate::crypto::fields::F2Config64;
-
-    use super::*;
-
-    type Field64_2 = Fp2<F2Config64>;
-
-    type F = Field64_2;
-
-    #[test]
-    fn single_point_verify() {
-        let poly_size = 10;
-        let num_coeffs = 1 << poly_size;
-        let pp = Whir::<F, WhirDefaultSpec>::setup(poly_size);
-
-        let poly = CoefficientList::new(
-            (0..num_coeffs)
-                .map(<F as Field>::BasePrimeField::from)
-                .collect(),
-        );
-
-        let io = IOPattern::<DefaultHash>::new("🌪️")
-            .commit_statement(&pp)
-            .add_whir_proof(&pp);
-        let mut merlin = io.to_merlin();
-
-        let witness = Whir::<F, Spec>::commit_and_write(&pp, &poly, &mut merlin).unwrap();
-
-        let mut rng = rand::thread_rng();
-        let point: Vec<F> = (0..poly_size).map(|_| F::from(rng.gen::<u64>())).collect();
-        let eval = poly.evaluate_at_extension(&MultilinearPoint(point.clone()));
-
-        let proof = Whir::<F, Spec>::open(&pp, witness, &point, &eval, &mut merlin).unwrap();
-        Whir::<F, Spec>::verify(&pp, &point, &eval, &proof, &merlin).unwrap();
     }
 }

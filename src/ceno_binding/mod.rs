@@ -1,5 +1,5 @@
 mod pcs;
-pub use pcs::Whir;
+pub use pcs::{DefaultHash, DigestIO, Whir, WhirDefaultSpec, WhirSpec};
 
 use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};

@@ -66,6 +66,6 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
         point: &[E],
         evals: &[E],
         proof: &Self::Proof,
-        transcript: &mut Self::Transcript,
+        transcript: &Self::Transcript,
     ) -> Result<(), Error>;
 }

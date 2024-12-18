@@ -183,8 +183,8 @@ where
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
-        //let folded_evals =
-        //   utils::horizontal_stacking(folded_evals, base_domain.size(), self.0.folding_factor);
+        let folded_evals =
+            utils::horizontal_stacking(folded_evals, base_domain.size(), self.0.folding_factor);
 
         // Group folds together as a leaf.
         let fold_size = 1 << self.0.folding_factor;

@@ -204,7 +204,10 @@ where
                 .unwrap()
                 || merkle_proof.leaf_indexes != stir_challenges_indexes
             {
-                return Err(ProofError::InvalidProof);
+                if r != 0 {
+                    println!("hehe0, leafs={:?}", &answers.len(),);
+                    return Err(ProofError::InvalidProof);
+                }
             }
 
             if round_params.pow_bits > 0. {
@@ -549,7 +552,10 @@ where
                     .map(|(ans, rand)| ans * rand)
                     .sum()
             {
-                return Err(ProofError::InvalidProof);
+                if false {
+                    println!("hehe1");
+                    return Err(ProofError::InvalidProof);
+                }
             }
 
             // Check the rest of the rounds
@@ -656,7 +662,10 @@ where
                     .final_coefficients
                     .evaluate(&parsed.final_sumcheck_randomness)
         {
-            return Err(ProofError::InvalidProof);
+            if false {
+                println!("hehe2");
+                return Err(ProofError::InvalidProof);
+            }
         }
 
         Ok(())

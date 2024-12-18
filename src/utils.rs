@@ -108,6 +108,8 @@ pub fn stack_evaluations_mut<F: Field>(evals: &mut [F], folding_factor: usize) {
 
 /// Takes a vector of matrix and stacking them horizontally
 /// Use in-place matrix transposes to avoid data copy
+/// each matrix has domain_size elements
+/// each matrix has shape (*, 1<<folding_factor)
 pub fn horizontal_stacking<F: Field>(
     evals: Vec<F>,
     domain_size: usize,
@@ -168,9 +170,9 @@ mod tests {
 
         let num = 256;
         let domain_size = 128;
-        let folding_factor = 3;
+        let folding_factor = 2;
         let fold_size = 1 << folding_factor;
-        assert_eq!(num % fold_size, 0);
+        assert_eq!(domain_size % fold_size, 0);
         let evals: Vec<_> = (0..num as u64).map(F::from).collect();
 
         let stacked = horizontal_stacking(evals, domain_size, folding_factor);

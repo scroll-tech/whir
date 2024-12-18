@@ -111,6 +111,7 @@ where
         parsed_commitment: &ParsedCommitment<F, MerkleConfig::InnerDigest>,
         statement: &Statement<F>, // Will be needed later
         whir_proof: &WhirProof<MerkleConfig, F>,
+        batched_randomness: Vec<F>, // used in first round
     ) -> ProofResult<ParsedProof<F>>
     where
         Arthur: FieldReader<F>
@@ -204,11 +205,27 @@ where
                 .unwrap()
                 || merkle_proof.leaf_indexes != stir_challenges_indexes
             {
-                if r != 0 {
-                    println!("hehe0, leafs={:?}", &answers.len(),);
-                    return Err(ProofError::InvalidProof);
-                }
+                return Err(ProofError::InvalidProof);
             }
+
+            let combined_answers: Vec<_> = answers
+                .into_iter()
+                .map(|raw_answer| {
+                    if batched_randomness.len() > 0 {
+                        let chunk_size = 1 << self.params.folding_factor;
+                        let num_polys = self.params.mv_parameters.num_polys;
+                        let mut res = vec![F::ZERO; chunk_size];
+                        for i in 0..chunk_size {
+                            for j in 0..num_polys {
+                                res[i] += raw_answer[i + j * chunk_size] * batched_randomness[j];
+                            }
+                        }
+                        res
+                    } else {
+                        raw_answer.clone()
+                    }
+                })
+                .collect();
 
             if round_params.pow_bits > 0. {
                 arthur.challenge_pow::<PowStrategy>(round_params.pow_bits)?;
@@ -242,7 +259,7 @@ where
                 ood_answers,
                 stir_challenges_indexes,
                 stir_challenges_points,
-                stir_challenges_answers: answers.to_vec(),
+                stir_challenges_answers: combined_answers,
                 combination_randomness,
                 sumcheck_rounds,
                 domain_gen_inv,
@@ -534,7 +551,13 @@ where
             points: initial_claims,
             evaluations: initial_answers,
         };
-        let parsed = self.parse_proof(arthur, &parsed_commitment, &statement, whir_proof)?;
+        let parsed = self.parse_proof(
+            arthur,
+            &parsed_commitment,
+            &statement,
+            whir_proof,
+            random_coeff,
+        )?;
 
         let computed_folds = self.compute_folds(&parsed);
 
@@ -543,19 +566,15 @@ where
             // Check the first polynomial
             let (mut prev_poly, mut randomness) = round.clone();
             if prev_poly.sum_over_hypercube()
-                != parsed_commitment
-                    .ood_answers
-                    .iter()
-                    .copied()
-                    .chain(statement.evaluations.clone())
+                != statement
+                    .evaluations
+                    .clone()
+                    .into_iter()
                     .zip(&parsed.initial_combination_randomness)
                     .map(|(ans, rand)| ans * rand)
                     .sum()
             {
-                if false {
-                    println!("hehe1");
-                    return Err(ProofError::InvalidProof);
-                }
+                return Err(ProofError::InvalidProof);
             }
 
             // Check the rest of the rounds
@@ -663,7 +682,7 @@ where
                     .evaluate(&parsed.final_sumcheck_randomness)
         {
             if false {
-                println!("hehe2");
+                println!("hehe");
                 return Err(ProofError::InvalidProof);
             }
         }
@@ -688,7 +707,7 @@ where
         // We first do a pass in which we rederive all the FS challenges
         // Then we will check the algebraic part (so to optimise inversions)
         let parsed_commitment = self.parse_commitment(arthur)?;
-        let parsed = self.parse_proof(arthur, &parsed_commitment, statement, whir_proof)?;
+        let parsed = self.parse_proof(arthur, &parsed_commitment, statement, whir_proof, vec![])?;
 
         let computed_folds = self.compute_folds(&parsed);
 

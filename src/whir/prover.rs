@@ -424,9 +424,13 @@ where
         } else {
             1 << self.0.folding_factor
         };
-        let answers: Vec<_> = stir_challenges_indexes
+
+        let raw_answers: Vec<_> = stir_challenges_indexes
             .iter()
             .map(|i| round_state.prev_merkle_answers[i * fold_size..(i + 1) * fold_size].to_vec())
+            .collect();
+        let answers: Vec<_> = raw_answers
+            .iter()
             .map(|raw_answer| match &round_state.batching_randomness {
                 Some(random_coeff) => {
                     let chunk_size = 1 << self.0.folding_factor;
@@ -439,7 +443,7 @@ where
                     }
                     res
                 }
-                _ => raw_answer,
+                _ => raw_answer.clone(),
             })
             .collect();
         // Evaluate answers in the folding randomness.
@@ -474,7 +478,7 @@ where
                 CoefficientList::new(answers.to_vec()).evaluate(&round_state.folding_randomness)
             })),
         }
-        round_state.merkle_proofs.push((merkle_proof, answers));
+        round_state.merkle_proofs.push((merkle_proof, raw_answers));
 
         // PoW
         if round_params.pow_bits > 0. {

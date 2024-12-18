@@ -341,6 +341,57 @@ where
         })
     }
 
+    /// this is copied and modified from `fn compute_v_poly`
+    /// to avoid modify the original function for compatibility
+    fn compute_v_poly_for_batched(&self, statement: &Statement<F>, proof: &ParsedProof<F>) -> F {
+        let mut num_variables = self.params.mv_parameters.num_variables;
+
+        let mut folding_randomness = MultilinearPoint(
+            iter::once(&proof.final_sumcheck_randomness.0)
+                .chain(iter::once(&proof.final_folding_randomness.0))
+                .chain(proof.rounds.iter().rev().map(|r| &r.folding_randomness.0))
+                .flatten()
+                .copied()
+                .collect(),
+        );
+
+        let mut value = statement
+            .points
+            .iter()
+            .zip(&proof.initial_combination_randomness)
+            .map(|(point, randomness)| *randomness * eq_poly_outside(&point, &folding_randomness))
+            .sum();
+
+        for round_proof in &proof.rounds {
+            num_variables -= self.params.folding_factor;
+            folding_randomness = MultilinearPoint(folding_randomness.0[..num_variables].to_vec());
+
+            let ood_points = &round_proof.ood_points;
+            let stir_challenges_points = &round_proof.stir_challenges_points;
+            let stir_challenges: Vec<_> = ood_points
+                .iter()
+                .chain(stir_challenges_points)
+                .cloned()
+                .map(|univariate| {
+                    MultilinearPoint::expand_from_univariate(univariate, num_variables)
+                    // TODO:
+                    // Maybe refactor outside
+                })
+                .collect();
+
+            let sum_of_claims: F = stir_challenges
+                .into_iter()
+                .map(|point| eq_poly_outside(&point, &folding_randomness))
+                .zip(&round_proof.combination_randomness)
+                .map(|(point, rand)| point * rand)
+                .sum();
+
+            value += sum_of_claims;
+        }
+
+        value
+    }
+
     fn compute_v_poly(
         &self,
         parsed_commitment: &ParsedCommitment<F, MerkleConfig::InnerDigest>,
@@ -673,7 +724,7 @@ where
         };
 
         // Check the final sumcheck evaluation
-        let evaluation_of_v_poly = self.compute_v_poly(&parsed_commitment, &statement, &parsed);
+        let evaluation_of_v_poly = self.compute_v_poly_for_batched(&statement, &parsed);
 
         if prev_sumcheck_poly_eval
             != evaluation_of_v_poly
@@ -681,10 +732,7 @@ where
                     .final_coefficients
                     .evaluate(&parsed.final_sumcheck_randomness)
         {
-            if false {
-                println!("hehe");
-                return Err(ProofError::InvalidProof);
-            }
+            return Err(ProofError::InvalidProof);
         }
 
         Ok(())

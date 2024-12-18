@@ -41,7 +41,8 @@ where
         let mut this = self.add_digest("merkle_digest");
         if params.committment_ood_samples > 0 {
             assert!(params.initial_statement);
-            this = this.add_ood(params.committment_ood_samples);
+            let num_answers = params.committment_ood_samples * params.mv_parameters.num_polys;
+            this = this.add_ood(params.committment_ood_samples, num_answers);
         }
         this
     }
@@ -50,6 +51,9 @@ where
         mut self,
         params: &WhirConfig<F, MerkleConfig, PowStrategy>,
     ) -> Self {
+        if params.mv_parameters.num_polys > 1 {
+            self = self.challenge_scalars(1, "batch_poly_combination_randomness");
+        }
         // TODO: Add statement
         if params.initial_statement {
             self = self
@@ -67,7 +71,7 @@ where
             let domain_size_bytes = ((folded_domain_size * 2 - 1).ilog2() as usize + 7) / 8;
             self = self
                 .add_digest("merkle_digest")
-                .add_ood(r.ood_samples)
+                .add_ood(r.ood_samples, r.ood_samples)
                 .challenge_bytes(r.num_queries * domain_size_bytes, "stir_queries")
                 .pow(r.pow_bits)
                 .challenge_scalars(1, "combination_randomness")

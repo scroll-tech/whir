@@ -2,7 +2,7 @@ use ark_ff::Field;
 use nimue::plugins::ark::FieldIOPattern;
 use nimue_pow::PoWIOPattern;
 pub trait OODIOPattern<F: Field> {
-    fn add_ood(self, num_samples: usize) -> Self;
+    fn add_ood(self, num_samples: usize, num_answers: usize) -> Self;
 }
 
 impl<F, IOPattern> OODIOPattern<F> for IOPattern
@@ -10,10 +10,10 @@ where
     F: Field,
     IOPattern: FieldIOPattern<F>,
 {
-    fn add_ood(self, num_samples: usize) -> Self {
+    fn add_ood(self, num_samples: usize, num_answers: usize) -> Self {
         if num_samples > 0 {
             self.challenge_scalars(num_samples, "ood_query")
-                .add_scalars(num_samples, "ood_ans")
+                .add_scalars(num_answers, "ood_ans")
         } else {
             self
         }
@@ -24,7 +24,7 @@ pub trait WhirPoWIOPattern {
     fn pow(self, bits: f64) -> Self;
 }
 
-impl <IOPattern> WhirPoWIOPattern for IOPattern
+impl<IOPattern> WhirPoWIOPattern for IOPattern
 where
     IOPattern: PoWIOPattern,
 {

@@ -154,7 +154,7 @@ where
             .chain(std::iter::once(eval))
             .collect();
 
-        let polynomial = CoefficientList::combine(witness.polys, random_coeff);
+        let polynomial = CoefficientList::combine(witness.polys, random_coeff.clone());
 
         let [combination_randomness_gen] = merlin.challenge_scalars()?;
         let combination_randomness =
@@ -185,6 +185,7 @@ where
             prev_merkle: witness.merkle_tree,
             prev_merkle_answers: witness.merkle_leaves,
             merkle_proofs: vec![],
+            batching_randomness: Some(random_coeff),
         };
 
         self.round(merlin, round_state)
@@ -272,6 +273,7 @@ where
             prev_merkle: witness.merkle_tree,
             prev_merkle_answers: witness.merkle_leaves,
             merkle_proofs: vec![],
+            batching_randomness: None,
         };
 
         self.round(merlin, round_state)
@@ -416,10 +418,29 @@ where
             .prev_merkle
             .generate_multi_proof(stir_challenges_indexes.clone())
             .unwrap();
-        let fold_size = 1 << self.0.folding_factor;
+        // leaves of first round is not combined yet
+        let fold_size = if round_state.batching_randomness.is_some() {
+            (1 << self.0.folding_factor) * self.0.mv_parameters.num_polys
+        } else {
+            1 << self.0.folding_factor
+        };
         let answers: Vec<_> = stir_challenges_indexes
             .iter()
             .map(|i| round_state.prev_merkle_answers[i * fold_size..(i + 1) * fold_size].to_vec())
+            .map(|raw_answer| match &round_state.batching_randomness {
+                Some(random_coeff) => {
+                    let chunk_size = 1 << self.0.folding_factor;
+                    let num_polys = self.0.mv_parameters.num_polys;
+                    let mut res = vec![F::ZERO; chunk_size];
+                    for i in 0..chunk_size {
+                        for j in 0..num_polys {
+                            res[i] += raw_answer[i + j * chunk_size] * random_coeff[j];
+                        }
+                    }
+                    res
+                }
+                _ => raw_answer,
+            })
             .collect();
         // Evaluate answers in the folding randomness.
         let mut stir_evaluations = ood_answers.clone();
@@ -501,6 +522,7 @@ where
             prev_merkle: merkle_tree,
             prev_merkle_answers: folded_evals,
             merkle_proofs: round_state.merkle_proofs,
+            batching_randomness: None,
         };
 
         self.round(merlin, round_state)
@@ -520,4 +542,5 @@ where
     prev_merkle: MerkleTree<MerkleConfig>,
     prev_merkle_answers: Vec<F>,
     merkle_proofs: Vec<(MultiPath<MerkleConfig>, Vec<Vec<F>>)>,
+    batching_randomness: Option<Vec<F>>,
 }

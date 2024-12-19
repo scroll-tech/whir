@@ -77,8 +77,8 @@ where
     MerkleConfig: Config<Leaf = [F]>,
     F: Sized + Clone + CanonicalSerialize + CanonicalDeserialize,
 {
-    proof: WhirProof<MerkleConfig, F>,
-    transcript: Vec<u8>,
+    pub proof: WhirProof<MerkleConfig, F>,
+    pub transcript: Vec<u8>,
 }
 
 impl<MerkleConfig, F> Serialize for WhirProofWrapper<MerkleConfig, F>

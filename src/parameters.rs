@@ -46,13 +46,15 @@ impl FromStr for SoundnessType {
 #[derive(Debug, Clone, Copy)]
 pub struct MultivariateParameters<F> {
     pub(crate) num_variables: usize,
+    pub(crate) num_polys: usize,
     _field: PhantomData<F>,
 }
 
 impl<F> MultivariateParameters<F> {
-    pub fn new(num_variables: usize) -> Self {
+    pub fn new(num_variables: usize, num_polys: usize) -> Self {
         Self {
             num_variables,
+            num_polys,
             _field: PhantomData,
         }
     }
@@ -60,7 +62,11 @@ impl<F> MultivariateParameters<F> {
 
 impl<F> Display for MultivariateParameters<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Number of variables: {}", self.num_variables)
+        write!(
+            f,
+            "Number of polynomials: {}, Number of variables: {}",
+            self.num_polys, self.num_variables
+        )
     }
 }
 

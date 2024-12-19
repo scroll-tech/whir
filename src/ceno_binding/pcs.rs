@@ -72,10 +72,14 @@ pub struct Whir<E: FftField, Spec: WhirSpec<E>>(PhantomData<(E, Spec)>);
 
 // Wrapper for WhirProof
 #[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
-pub struct WhirProofWrapper<MerkleConfig, F>(WhirProof<MerkleConfig, F>)
+pub struct WhirProofWrapper<MerkleConfig, F>
 where
     MerkleConfig: Config<Leaf = [F]>,
-    F: Sized + Clone + CanonicalSerialize + CanonicalDeserialize;
+    F: Sized + Clone + CanonicalSerialize + CanonicalDeserialize,
+{
+    proof: WhirProof<MerkleConfig, F>,
+    transcript: Vec<u8>,
+}
 
 impl<MerkleConfig, F> Serialize for WhirProofWrapper<MerkleConfig, F>
 where
@@ -86,11 +90,16 @@ where
     where
         S: serde::Serializer,
     {
-        let proof = &self.0 .0;
+        let proof = &self.proof.0;
         // Create a buffer that implements the `Write` trait
         let mut buffer = Vec::new();
         proof.serialize_compressed(&mut buffer).unwrap();
-        serializer.serialize_bytes(&buffer)
+        let proof_size = buffer.len();
+        let proof_size_bytes = proof_size.to_le_bytes();
+        let mut data = proof_size_bytes.to_vec();
+        data.extend_from_slice(&buffer);
+        data.extend_from_slice(&self.transcript);
+        serializer.serialize_bytes(&data)
     }
 }
 
@@ -103,11 +112,13 @@ where
     where
         D: serde::Deserializer<'de>,
     {
-        // Deserialize the bytes into a buffer
-        let buffer: Vec<u8> = Deserialize::deserialize(deserializer)?;
-        // Deserialize the buffer into a proof
-        let proof = WhirProof::deserialize_compressed(&buffer[..]).unwrap();
-        Ok(WhirProofWrapper(proof))
+        let data: Vec<u8> = Deserialize::deserialize(deserializer)?;
+        let proof_size_bytes = &data[0..8];
+        let proof_size = u64::from_le_bytes(proof_size_bytes.try_into().unwrap());
+        let proof_bytes = &data[8..8 + proof_size as usize];
+        let proof = WhirProof::deserialize_compressed(&proof_bytes[..]).unwrap();
+        let transcript = data[8 + proof_size as usize..].to_vec();
+        Ok(WhirProofWrapper { proof, transcript })
     }
 }
 
@@ -212,7 +223,11 @@ where
         };
 
         let proof = prover.prove(transcript, statement, witness.witness)?;
-        Ok(WhirProofWrapper(proof))
+
+        Ok(WhirProofWrapper {
+            proof,
+            transcript: transcript.transcript().to_vec(),
+        })
     }
 
     fn batch_open(
@@ -250,7 +265,7 @@ where
 
         for _ in 0..reps {
             let mut arthur = io.to_arthur(transcript.transcript());
-            verifier.verify(&mut arthur, &statement, &proof.0)?;
+            verifier.verify(&mut arthur, &statement, &proof.proof)?;
         }
         Ok(())
     }

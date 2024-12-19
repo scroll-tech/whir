@@ -1,8 +1,10 @@
-use core::panic;
+use core::{fmt, panic};
+use derive_more::Debug;
 use std::{f64::consts::LOG2_10, fmt::Display, marker::PhantomData};
 
 use ark_crypto_primitives::merkle_tree::{Config, LeafParam, TwoToOneParam};
 use ark_ff::FftField;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     crypto::fields::FieldWithSize,
@@ -10,7 +12,7 @@ use crate::{
     parameters::{FoldType, MultivariateParameters, SoundnessType, WhirParameters},
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WhirConfig<F, MerkleConfig, PowStrategy>
 where
     F: FftField,
@@ -41,11 +43,13 @@ where
     pub(crate) pow_strategy: PhantomData<PowStrategy>,
 
     // Merkle tree parameters
+    #[debug(skip)]
     pub(crate) leaf_hash_params: LeafParam<MerkleConfig>,
+    #[debug(skip)]
     pub(crate) two_to_one_params: TwoToOneParam<MerkleConfig>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct RoundConfig {
     pub(crate) pow_bits: f64,
     pub(crate) folding_pow_bits: f64,
@@ -437,7 +441,7 @@ where
     MerkleConfig: Config,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.mv_parameters.fmt(f)?;
+        fmt::Display::fmt(&self.mv_parameters, f)?;
         writeln!(f, ", folding factor: {}", self.folding_factor)?;
         writeln!(
             f,
@@ -451,7 +455,7 @@ where
             self.starting_folding_pow_bits
         )?;
         for r in &self.round_parameters {
-            r.fmt(f)?;
+            fmt::Display::fmt(&r, f)?;
         }
 
         writeln!(

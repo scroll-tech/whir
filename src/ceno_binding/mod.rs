@@ -1,5 +1,6 @@
 mod pcs;
 pub use ark_crypto_primitives::merkle_tree::Config;
+use nimue::plugins::ark;
 pub use pcs::{DefaultHash, Whir, WhirDefaultSpec, WhirSpec};
 
 use ark_ff::FftField;
@@ -7,7 +8,9 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
 
-#[derive(Debug, thiserror::Error)]
+pub use nimue::plugins::ark::{FieldChallenges, FieldWriter};
+
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
     ProofError(#[from] nimue::ProofError),

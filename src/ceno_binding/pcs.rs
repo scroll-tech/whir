@@ -121,6 +121,33 @@ where
     }
 }
 
+#[derive(Clone)]
+pub struct CommitmentWithWitness<F, MerkleConfig>
+where
+    MerkleConfig: Config,
+{
+    pub commitment: MerkleConfig::InnerDigest,
+    pub witness: Witness<F, MerkleConfig>,
+}
+
+impl<F: FftField, MerkleConfig> CommitmentWithWitness<F, MerkleConfig>
+where
+    MerkleConfig: Config,
+{
+    pub fn ood_answers(&self) -> Vec<F> {
+        self.witness.ood_answers.clone()
+    }
+}
+
+impl<F, MerkleConfig> Debug for CommitmentWithWitness<F, MerkleConfig>
+where
+    MerkleConfig: Config,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str("CommitmentWithWitness")
+    }
+}
+
 impl<E, Spec: WhirSpec<E>> PolynomialCommitmentScheme<E> for Whir<E, Spec>
 where
     E: FftField + Serialize + DeserializeOwned + Debug,
@@ -130,7 +157,7 @@ where
     IOPattern: WhirIOPattern<E, Spec::MerkleConfig>,
 {
     type Param = WhirSetupParams<E>;
-    type CommitmentWithWitness = Witness<E, Spec::MerkleConfig>;
+    type CommitmentWithWitness = CommitmentWithWitness<E, Spec::MerkleConfig>;
     type Proof = WhirProofWrapper<Spec::MerkleConfig, E>;
     type Poly = CoefficientList<E::BasePrimeField>;
     type Transcript = Merlin<DefaultHash>;
@@ -154,7 +181,10 @@ where
         let committer = Committer::new(params);
         let witness = committer.commit(transcript, poly.clone())?;
 
-        Ok(witness)
+        Ok(CommitmentWithWitness {
+            commitment: witness.merkle_tree.root(),
+            witness,
+        })
     }
 
     fn batch_commit(
@@ -181,7 +211,7 @@ where
             evaluations: vec![eval.clone()],
         };
 
-        let proof = prover.prove(transcript, statement, witness)?;
+        let proof = prover.prove(transcript, statement, witness.witness)?;
         Ok(WhirProofWrapper(proof))
     }
 

@@ -5,7 +5,7 @@ use crate::parameters::{
 };
 use crate::poly_utils::{coeffs::CoefficientList, MultilinearPoint};
 use crate::whir::{
-    committer::{Committer, Witness},
+    committer::{Committer, Witnesses},
     iopattern::WhirIOPattern,
     parameters::WhirConfig,
     prover::Prover,
@@ -34,14 +34,14 @@ where
     E: FftField + CanonicalSerialize + CanonicalDeserialize,
 {
     type Param = WhirPCSConfig<E>;
-    type CommitmentWithData = Witness<E, MerkleTreeParams<E>>;
+    type CommitmentWithWitness = Witnesses<E, MerkleTreeParams<E>>;
     type Proof = WhirProof<MerkleTreeParams<E>, E>;
     // TODO: support both base and extension fields
     type Poly = CoefficientList<E::BasePrimeField>;
     type Transcript = Merlin<DefaultHash>;
 
-    fn setup(poly_size: usize) -> Self::Param {
-        let mv_params = MultivariateParameters::<E>::new(poly_size);
+    fn setup(poly_size: usize, num_polys: usize) -> Self::Param {
+        let mv_params = MultivariateParameters::<E>::new(poly_size, num_polys);
         let starting_rate = 1;
         let pow_bits = default_max_pow(poly_size, starting_rate);
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
@@ -67,22 +67,41 @@ where
         pp: &Self::Param,
         poly: &Self::Poly,
         transcript: &mut Self::Transcript,
-    ) -> Result<Self::CommitmentWithData, Error> {
+    ) -> Result<Self::CommitmentWithWitness, Error> {
         let committer = Committer::new(pp.clone());
         let witness = committer.commit(transcript, poly.clone())?;
-        Ok(witness)
+        Ok(witness.into())
     }
 
-    fn batch_commit(
-        _pp: &Self::Param,
-        _polys: &[Self::Poly],
-    ) -> Result<Self::CommitmentWithData, Error> {
-        todo!()
+    // Assumption:
+    // 1. there must be at least one polynomial
+    // 2. all polynomials are in base field
+    // (TODO: this assumption is from the whir implementation,
+    // if we are going to support extension field, need modify whir's implementation)
+    // 3. all polynomials must have the same number of variables
+    fn batch_commit_and_write(
+        pp: &Self::Param,
+        polys: &[Self::Poly],
+        transcript: &mut Self::Transcript,
+    ) -> Result<Self::CommitmentWithWitness, Error> {
+        if polys.is_empty() {
+            return Err(Error::InvalidPcsParam);
+        }
+
+        for i in 1..polys.len() {
+            if polys[i].num_variables() != polys[0].num_variables() {
+                return Err(Error::InvalidPcsParam);
+            }
+        }
+
+        let committer = Committer::new(pp.clone());
+        let witness = committer.batch_commit(transcript, polys)?;
+        Ok(witness)
     }
 
     fn open(
         pp: &Self::Param,
-        witness: Self::CommitmentWithData,
+        witness: Self::CommitmentWithWitness,
         point: &[E],
         eval: &E,
         transcript: &mut Self::Transcript,
@@ -93,19 +112,21 @@ where
             evaluations: vec![eval.clone()],
         };
 
-        let proof = prover.prove(transcript, statement, witness)?;
+        let proof = prover.prove(transcript, statement, witness.into())?;
         Ok(proof)
     }
 
-    fn batch_open(
-        _pp: &Self::Param,
-        _polys: &[Self::Poly],
-        _comm: Self::CommitmentWithData,
-        _point: &[E],
-        _evals: &[E],
-        _transcript: &mut Self::Transcript,
+    fn simple_batch_open(
+        pp: &Self::Param,
+        witnesses: Self::CommitmentWithWitness,
+        point: &[E],
+        evals: &[E],
+        transcript: &mut Self::Transcript,
     ) -> Result<Self::Proof, Error> {
-        todo!()
+        assert_eq!(witnesses.polys.len(), evals.len());
+        let prover = Prover(pp.clone());
+        let proof = prover.simple_batch_prove(transcript, point, evals, witnesses)?;
+        Ok(proof)
     }
 
     fn verify(
@@ -134,14 +155,24 @@ where
         Ok(())
     }
 
-    fn batch_verify(
-        _vp: &Self::Param,
-        _point: &[E],
-        _evals: &[E],
-        _proof: &Self::Proof,
-        _transcript: &mut Self::Transcript,
+    fn simple_batch_verify(
+        vp: &Self::Param,
+        point: &[E],
+        evals: &[E],
+        proof: &Self::Proof,
+        transcript: &Self::Transcript,
     ) -> Result<(), Error> {
-        todo!()
+        let reps = 1000;
+        let verifier = Verifier::new(vp.clone());
+        let io = IOPattern::<DefaultHash>::new("🌪️")
+            .commit_statement(&vp)
+            .add_whir_proof(&vp);
+
+        for _ in 0..reps {
+            let mut arthur = io.to_arthur(transcript.transcript());
+            verifier.simple_batch_verify(&mut arthur, point, evals, proof)?;
+        }
+        Ok(())
     }
 }
 
@@ -154,10 +185,10 @@ mod tests {
     use crate::crypto::fields::Field64_2 as F;
 
     #[test]
-    fn single_point_verify() {
+    fn single_poly_verify() {
         let poly_size = 10;
         let num_coeffs = 1 << poly_size;
-        let pp = Whir::<F>::setup(poly_size);
+        let pp = Whir::<F>::setup(poly_size, 1);
 
         let poly = CoefficientList::new(
             (0..num_coeffs)
@@ -178,5 +209,41 @@ mod tests {
 
         let proof = Whir::<F>::open(&pp, witness, &point, &eval, &mut merlin).unwrap();
         Whir::<F>::verify(&pp, &point, &eval, &proof, &merlin).unwrap();
+    }
+
+    #[test]
+    fn simple_batch_polys_verify() {
+        let poly_size = 10;
+        let num_coeffs = 1 << poly_size;
+        let num_polys = 1 << 3;
+        let pp = Whir::<F>::setup(poly_size, num_polys);
+
+        let mut polys = Vec::new();
+        for _ in 0..num_polys {
+            let poly = CoefficientList::new(
+                (0..num_coeffs)
+                    .map(<F as Field>::BasePrimeField::from)
+                    .collect(),
+            );
+            polys.push(poly);
+        }
+
+        let io = IOPattern::<DefaultHash>::new("🌪️")
+            .commit_statement(&pp)
+            .add_whir_proof(&pp);
+        let mut merlin = io.to_merlin();
+
+        let witness = Whir::<F>::batch_commit_and_write(&pp, &polys, &mut merlin).unwrap();
+
+        let mut rng = rand::thread_rng();
+        let point: Vec<F> = (0..poly_size).map(|_| F::from(rng.gen::<u64>())).collect();
+        let evals = polys
+            .iter()
+            .map(|poly| poly.evaluate_at_extension(&MultilinearPoint(point.clone())))
+            .collect::<Vec<_>>();
+
+        let proof =
+            Whir::<F>::simple_batch_open(&pp, witness, &point, &evals, &mut merlin).unwrap();
+        Whir::<F>::simple_batch_verify(&pp, &point, &evals, &proof, &merlin).unwrap();
     }
 }

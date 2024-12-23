@@ -25,6 +25,7 @@ use whir::{
 use serde::Serialize;
 
 use clap::Parser;
+use whir::ceno_binding::{pcs::Whir, PolynomialCommitmentScheme};
 use whir::whir::fs_utils::{DigestReader, DigestWriter};
 use whir::whir::iopattern::DigestIOPattern;
 
@@ -39,9 +40,6 @@ struct Args {
 
     #[arg(short = 'd', long, default_value = "20")]
     num_variables: usize,
-
-    #[arg(short = 'e', long = "evaluations", default_value = "1")]
-    num_evaluations: usize,
 
     #[arg(short = 'p', long = "num_polys", default_value = "1")]
     num_polys: usize,
@@ -82,7 +80,6 @@ struct BenchmarkOutput {
     merkle_tree: AvailableMerkle,
 
     // Whir
-    whir_evaluations: usize,
     whir_argument_size: usize,
     whir_prover_time: Duration,
     whir_prover_hashes: usize,
@@ -257,6 +254,7 @@ fn run_whir<F, MerkleConfig>(
         whir_verifier_hashes,
     ) = {
         // Run PCS
+        use rand::prelude::*;
         use whir::poly_utils::MultilinearPoint;
         use whir::whir::{
             committer::Committer, iopattern::WhirIOPattern, parameters::WhirConfig, prover::Prover,
@@ -275,16 +273,14 @@ fn run_whir<F, MerkleConfig>(
 
         let mut merlin = io.to_merlin();
 
-        let points: Vec<_> = (0..args.num_evaluations)
-            .map(|i| MultilinearPoint(vec![F::from(i as u64); num_variables]))
+        let mut rng = rand::thread_rng();
+        let point: Vec<F> = (0..num_variables)
+            .map(|_| F::from(rng.gen::<u64>()))
             .collect();
-        let evaluations = points
-            .iter()
-            .map(|point| polynomial.evaluate_at_extension(point))
-            .collect();
+        let eval = polynomial.evaluate_at_extension(&MultilinearPoint(point.clone()));
         let statement = Statement {
-            points,
-            evaluations,
+            points: vec![MultilinearPoint(point)],
+            evaluations: vec![eval],
         };
 
         HashCounter::reset();
@@ -338,7 +334,6 @@ fn run_whir<F, MerkleConfig>(
         merkle_tree: args.merkle_tree,
 
         // Whir
-        whir_evaluations: args.num_evaluations,
         whir_prover_time,
         whir_argument_size,
         whir_prover_hashes,

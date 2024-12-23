@@ -171,7 +171,6 @@ where
     type CommitmentWithWitness = CommitmentWithWitness<E, Spec::MerkleConfig>;
     type Proof = WhirProofWrapper<Spec::MerkleConfig, E>;
     type Poly = CoefficientList<E::BasePrimeField>;
-    type Transcript = Merlin<DefaultHash>;
 
     fn setup(poly_size: usize) -> Self::Param {
         WhirSetupParams {
@@ -183,7 +182,7 @@ where
     fn commit_and_write(
         pp: &Self::Param,
         poly: &Self::Poly,
-        transcript: &mut Self::Transcript,
+        transcript: &mut Merlin<DefaultHash>,
     ) -> Result<Self::CommitmentWithWitness, Error> {
         let whir_params = Spec::get_parameters(pp.num_variables);
         let mv_params = MultivariateParameters::new(pp.num_variables);
@@ -210,7 +209,7 @@ where
         witness: Self::CommitmentWithWitness,
         point: &[E],
         eval: &E,
-        transcript: &mut Self::Transcript,
+        transcript: &mut Merlin<DefaultHash>,
     ) -> Result<Self::Proof, Error> {
         let whir_params = Spec::get_parameters(pp.num_variables);
         let mv_params = MultivariateParameters::new(pp.num_variables);
@@ -236,7 +235,7 @@ where
         _comm: Self::CommitmentWithWitness,
         _point: &[E],
         _evals: &[E],
-        _transcript: &mut Self::Transcript,
+        _transcript: &mut Merlin<DefaultHash>,
     ) -> Result<Self::Proof, Error> {
         todo!()
     }
@@ -246,27 +245,21 @@ where
         point: &[E],
         eval: &E,
         proof: &Self::Proof,
-        transcript: &Self::Transcript,
+        transcript: &mut Arthur<DefaultHash>,
     ) -> Result<(), Error> {
         let whir_params = Spec::get_parameters(vp.num_variables);
         let mv_params = MultivariateParameters::new(vp.num_variables);
         let params = WhirConfig::<E, Spec::MerkleConfig, PowStrategy>::new(mv_params, whir_params);
 
-        let reps = 1000;
         let verifier = Verifier::new(params.clone());
-        let io = IOPattern::<DefaultHash>::new("🌪️")
-            .commit_statement(&params)
-            .add_whir_proof(&params);
 
         let statement = Statement {
             points: vec![MultilinearPoint(point.to_vec())],
             evaluations: vec![eval.clone()],
         };
 
-        for _ in 0..reps {
-            let mut arthur = io.to_arthur(transcript.transcript());
-            verifier.verify(&mut arthur, &statement, &proof.proof)?;
-        }
+        verifier.verify(transcript, &statement, &proof.proof)?;
+
         Ok(())
     }
 
@@ -275,7 +268,7 @@ where
         _point: &[E],
         _evals: &[E],
         _proof: &Self::Proof,
-        _transcript: &mut Self::Transcript,
+        _transcript: &mut Arthur<DefaultHash>,
     ) -> Result<(), Error> {
         todo!()
     }

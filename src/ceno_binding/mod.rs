@@ -1,6 +1,6 @@
 mod pcs;
 pub use ark_crypto_primitives::merkle_tree::Config;
-use nimue::plugins::ark;
+use nimue::{plugins::ark, Arthur, Merlin};
 pub use pcs::{DefaultHash, Whir, WhirDefaultSpec, WhirSpec};
 
 use ark_ff::FftField;
@@ -21,14 +21,13 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
     type CommitmentWithWitness: Clone + Debug;
     type Proof: Clone + CanonicalSerialize + CanonicalDeserialize + Serialize + DeserializeOwned;
     type Poly: Clone + Debug + Serialize + DeserializeOwned;
-    type Transcript;
 
     fn setup(poly_size: usize) -> Self::Param;
 
     fn commit_and_write(
         pp: &Self::Param,
         poly: &Self::Poly,
-        transcript: &mut Self::Transcript,
+        transcript: &mut Merlin<DefaultHash>,
     ) -> Result<Self::CommitmentWithWitness, Error>;
 
     fn batch_commit(
@@ -41,7 +40,7 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
         comm: Self::CommitmentWithWitness,
         point: &[E],
         eval: &E,
-        transcript: &mut Self::Transcript,
+        merlin: &mut Merlin<DefaultHash>,
     ) -> Result<Self::Proof, Error>;
 
     /// This is a simple version of batch open:
@@ -54,7 +53,7 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
         comm: Self::CommitmentWithWitness,
         point: &[E],
         evals: &[E],
-        transcript: &mut Self::Transcript,
+        transcript: &mut Merlin<DefaultHash>,
     ) -> Result<Self::Proof, Error>;
 
     fn verify(
@@ -62,7 +61,7 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
         point: &[E],
         eval: &E,
         proof: &Self::Proof,
-        transcript: &Self::Transcript,
+        transcript: &mut Arthur<DefaultHash>,
     ) -> Result<(), Error>;
 
     fn batch_verify(
@@ -70,6 +69,6 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
         point: &[E],
         evals: &[E],
         proof: &Self::Proof,
-        transcript: &mut Self::Transcript,
+        transcript: &mut Arthur<DefaultHash>,
     ) -> Result<(), Error>;
 }

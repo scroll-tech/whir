@@ -38,7 +38,7 @@ pub trait WhirSpec<E: FftField>: Clone {
     fn get_parameters(num_variables: usize) -> WhirParameters<Self::MerkleConfig, PowStrategy>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct WhirDefaultSpec;
 
 impl<E: FftField> WhirSpec<E> for WhirDefaultSpec {

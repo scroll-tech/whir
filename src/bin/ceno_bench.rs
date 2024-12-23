@@ -3,31 +3,21 @@ use std::{
     time::{Duration, Instant},
 };
 
-use ark_crypto_primitives::{
-    crh::{CRHScheme, TwoToOneCRHScheme},
-    merkle_tree::Config,
-};
 use ark_ff::{FftField, Field};
 use ark_serialize::CanonicalSerialize;
-use nimue::{Arthur, DefaultHash, IOPattern, Merlin};
-use nimue_pow::blake3::Blake3PoW;
+use nimue::{DefaultHash, IOPattern};
 use whir::{
-    cmdline_utils::{AvailableFields, AvailableMerkle},
-    crypto::{
-        fields,
-        merkle_tree::{self, HashCounter},
-    },
+    cmdline_utils::AvailableFields,
+    crypto::{fields, merkle_tree::HashCounter},
     parameters::*,
     poly_utils::coeffs::CoefficientList,
-    whir::{iopattern::WhirIOPattern, Statement},
+    whir::Statement,
 };
 
 use serde::Serialize;
 
 use clap::Parser;
 use whir::ceno_binding::{pcs::Whir, PolynomialCommitmentScheme};
-use whir::whir::fs_utils::{DigestReader, DigestWriter};
-use whir::whir::iopattern::DigestIOPattern;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -61,9 +51,6 @@ struct Args {
 
     #[arg(short = 'f', long = "field", default_value = "Goldilocks2")]
     field: AvailableFields,
-
-    #[arg(long = "hash", default_value = "Blake3")]
-    merkle_tree: AvailableMerkle,
 }
 
 #[derive(Debug, Serialize)]
@@ -77,7 +64,6 @@ struct BenchmarkOutput {
     folding_factor: usize,
     soundness_type: SoundnessType,
     field: AvailableFields,
-    merkle_tree: AvailableMerkle,
 
     // Whir
     whir_argument_size: usize,
@@ -87,129 +73,43 @@ struct BenchmarkOutput {
     whir_verifier_hashes: usize,
 }
 
-type PowStrategy = Blake3PoW;
-
 fn main() {
     let mut args = Args::parse();
     let field = args.field;
-    let merkle = args.merkle_tree;
-
     if args.pow_bits.is_none() {
         args.pow_bits = Some(default_max_pow(args.num_variables, args.rate));
     }
-
-    let mut rng = ark_std::test_rng();
-
-    match (field, merkle) {
-        (AvailableFields::Goldilocks1, AvailableMerkle::Blake3) => {
+    match field {
+        AvailableFields::Goldilocks1 => {
             use fields::Field64 as F;
-            use merkle_tree::blake3 as mt;
-
-            let (leaf_hash_params, two_to_one_params) = mt::default_config::<F>(&mut rng);
-            run_whir::<F, mt::MerkleTreeParams<F>>(args, leaf_hash_params, two_to_one_params);
+            run_whir::<F>(args)
         }
-
-        (AvailableFields::Goldilocks1, AvailableMerkle::Keccak256) => {
-            use fields::Field64 as F;
-            use merkle_tree::keccak as mt;
-
-            let (leaf_hash_params, two_to_one_params) = mt::default_config::<F>(&mut rng);
-            run_whir::<F, mt::MerkleTreeParams<F>>(args, leaf_hash_params, two_to_one_params);
-        }
-
-        (AvailableFields::Goldilocks2, AvailableMerkle::Blake3) => {
+        AvailableFields::Goldilocks2 => {
             use fields::Field64_2 as F;
-            use merkle_tree::blake3 as mt;
-
-            let (leaf_hash_params, two_to_one_params) = mt::default_config::<F>(&mut rng);
-            run_whir::<F, mt::MerkleTreeParams<F>>(args, leaf_hash_params, two_to_one_params);
+            run_whir::<F>(args)
         }
-
-        (AvailableFields::Goldilocks2, AvailableMerkle::Keccak256) => {
-            use fields::Field64_2 as F;
-            use merkle_tree::keccak as mt;
-
-            let (leaf_hash_params, two_to_one_params) = mt::default_config::<F>(&mut rng);
-            run_whir::<F, mt::MerkleTreeParams<F>>(args, leaf_hash_params, two_to_one_params);
-        }
-
-        (AvailableFields::Goldilocks3, AvailableMerkle::Blake3) => {
+        AvailableFields::Goldilocks3 => {
             use fields::Field64_3 as F;
-            use merkle_tree::blake3 as mt;
-
-            let (leaf_hash_params, two_to_one_params) = mt::default_config::<F>(&mut rng);
-            run_whir::<F, mt::MerkleTreeParams<F>>(args, leaf_hash_params, two_to_one_params);
+            run_whir::<F>(args)
         }
-
-        (AvailableFields::Goldilocks3, AvailableMerkle::Keccak256) => {
-            use fields::Field64_3 as F;
-            use merkle_tree::keccak as mt;
-
-            let (leaf_hash_params, two_to_one_params) = mt::default_config::<F>(&mut rng);
-            run_whir::<F, mt::MerkleTreeParams<F>>(args, leaf_hash_params, two_to_one_params);
-        }
-
-        (AvailableFields::Field128, AvailableMerkle::Blake3) => {
+        AvailableFields::Field128 => {
             use fields::Field128 as F;
-            use merkle_tree::blake3 as mt;
-
-            let (leaf_hash_params, two_to_one_params) = mt::default_config::<F>(&mut rng);
-            run_whir::<F, mt::MerkleTreeParams<F>>(args, leaf_hash_params, two_to_one_params);
+            run_whir::<F>(args)
         }
-
-        (AvailableFields::Field128, AvailableMerkle::Keccak256) => {
-            use fields::Field128 as F;
-            use merkle_tree::keccak as mt;
-
-            let (leaf_hash_params, two_to_one_params) = mt::default_config::<F>(&mut rng);
-            run_whir::<F, mt::MerkleTreeParams<F>>(args, leaf_hash_params, two_to_one_params);
-        }
-
-        (AvailableFields::Field192, AvailableMerkle::Blake3) => {
+        AvailableFields::Field192 => {
             use fields::Field192 as F;
-            use merkle_tree::blake3 as mt;
-
-            let (leaf_hash_params, two_to_one_params) = mt::default_config::<F>(&mut rng);
-            run_whir::<F, mt::MerkleTreeParams<F>>(args, leaf_hash_params, two_to_one_params);
+            run_whir::<F>(args)
         }
-
-        (AvailableFields::Field192, AvailableMerkle::Keccak256) => {
-            use fields::Field192 as F;
-            use merkle_tree::keccak as mt;
-
-            let (leaf_hash_params, two_to_one_params) = mt::default_config::<F>(&mut rng);
-            run_whir::<F, mt::MerkleTreeParams<F>>(args, leaf_hash_params, two_to_one_params);
-        }
-
-        (AvailableFields::Field256, AvailableMerkle::Blake3) => {
+        AvailableFields::Field256 => {
             use fields::Field256 as F;
-            use merkle_tree::blake3 as mt;
-
-            let (leaf_hash_params, two_to_one_params) = mt::default_config::<F>(&mut rng);
-            run_whir::<F, mt::MerkleTreeParams<F>>(args, leaf_hash_params, two_to_one_params);
-        }
-
-        (AvailableFields::Field256, AvailableMerkle::Keccak256) => {
-            use fields::Field256 as F;
-            use merkle_tree::keccak as mt;
-
-            let (leaf_hash_params, two_to_one_params) = mt::default_config::<F>(&mut rng);
-            run_whir::<F, mt::MerkleTreeParams<F>>(args, leaf_hash_params, two_to_one_params);
+            run_whir::<F>(args)
         }
     }
 }
 
-fn run_whir<F, MerkleConfig>(
-    args: Args,
-    leaf_hash_params: <<MerkleConfig as Config>::LeafHash as CRHScheme>::Parameters,
-    two_to_one_params: <<MerkleConfig as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters,
-) where
+fn run_whir<F>(args: Args)
+where
     F: FftField + CanonicalSerialize,
-    MerkleConfig: Config<Leaf = [F]> + Clone,
-    MerkleConfig::InnerDigest: AsRef<[u8]> + From<[u8; 32]>,
-    IOPattern: DigestIOPattern<MerkleConfig>,
-    Merlin: DigestWriter<MerkleConfig>,
-    for<'a> Arthur<'a>: DigestReader<MerkleConfig>,
 {
     let security_level = args.security_level;
     let pow_bits = args.pow_bits.unwrap();
@@ -225,18 +125,12 @@ fn run_whir<F, MerkleConfig>(
 
     let num_coeffs = 1 << num_variables;
 
-    let mv_params = MultivariateParameters::<F>::new(num_variables, num_polys);
-
-    let whir_params = WhirParameters::<MerkleConfig, PowStrategy> {
-        initial_statement: true,
+    let partial_params = WhirPartialParameters {
         security_level,
         pow_bits,
         folding_factor,
-        leaf_hash_params,
-        two_to_one_params,
         soundness_type,
         fold_optimisation,
-        _pow_parameters: Default::default(),
         starting_log_inv_rate: starting_rate,
     };
 
@@ -256,21 +150,16 @@ fn run_whir<F, MerkleConfig>(
         // Run PCS
         use rand::prelude::*;
         use whir::poly_utils::MultilinearPoint;
-        use whir::whir::{
-            committer::Committer, iopattern::WhirIOPattern, parameters::WhirConfig, prover::Prover,
-            verifier::Verifier, whir_proof_size,
-        };
+        use whir::whir::{iopattern::WhirIOPattern, verifier::Verifier, whir_proof_size};
 
-        let params = WhirConfig::<F, MerkleConfig, PowStrategy>::new(mv_params, whir_params);
-        if !params.check_pow_bits() {
+        let pp = Whir::<F>::setup(num_variables, num_polys, Some(partial_params));
+        if !pp.check_pow_bits() {
             println!("WARN: more PoW bits required than what specified.");
         }
 
         let io = IOPattern::<DefaultHash>::new("🌪️")
-            .commit_statement(&params)
-            .add_whir_proof(&params)
-            .clone();
-
+            .commit_statement(&pp)
+            .add_whir_proof(&pp);
         let mut merlin = io.to_merlin();
 
         let mut rng = rand::thread_rng();
@@ -279,28 +168,22 @@ fn run_whir<F, MerkleConfig>(
             .collect();
         let eval = polynomial.evaluate_at_extension(&MultilinearPoint(point.clone()));
         let statement = Statement {
-            points: vec![MultilinearPoint(point)],
+            points: vec![MultilinearPoint(point.clone())],
             evaluations: vec![eval],
         };
 
         HashCounter::reset();
         let whir_prover_time = Instant::now();
 
-        let committer = Committer::new(params.clone());
-        let witness = committer.commit(&mut merlin, polynomial.clone()).unwrap();
-
-        let prover = Prover(params.clone());
-
-        let proof = prover
-            .prove(&mut merlin, statement.clone(), witness)
-            .unwrap();
+        let witness = Whir::<F>::commit_and_write(&pp, &polynomial, &mut merlin).unwrap();
+        let proof = Whir::<F>::open(&pp, witness, &point, &eval, &mut merlin).unwrap();
 
         let whir_prover_time = whir_prover_time.elapsed();
         let whir_argument_size = whir_proof_size(merlin.transcript(), &proof);
         let whir_prover_hashes = HashCounter::get();
 
         // Just not to count that initial inversion (which could be precomputed)
-        let verifier = Verifier::new(params);
+        let verifier = Verifier::new(pp);
 
         HashCounter::reset();
         let whir_verifier_time = Instant::now();
@@ -331,7 +214,6 @@ fn run_whir<F, MerkleConfig>(
         folding_factor,
         soundness_type,
         field: args.field,
-        merkle_tree: args.merkle_tree,
 
         // Whir
         whir_prover_time,

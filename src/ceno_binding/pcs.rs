@@ -2,6 +2,7 @@ use super::{Error, PolynomialCommitmentScheme};
 use crate::crypto::merkle_tree::blake3::{self as mt, MerkleTreeParams};
 use crate::parameters::{
     default_max_pow, FoldType, MultivariateParameters, SoundnessType, WhirParameters,
+    WhirPartialParameters,
 };
 use crate::poly_utils::{coeffs::CoefficientList, MultilinearPoint};
 use crate::whir::{
@@ -40,7 +41,11 @@ where
     type Poly = CoefficientList<E::BasePrimeField>;
     type Transcript = Merlin<DefaultHash>;
 
-    fn setup(poly_size: usize, num_polys: usize) -> Self::Param {
+    fn setup(
+        poly_size: usize,
+        num_polys: usize,
+        partial_params: Option<WhirPartialParameters>,
+    ) -> Self::Param {
         let mv_params = MultivariateParameters::<E>::new(poly_size, num_polys);
         let starting_rate = 1;
         let pow_bits = default_max_pow(poly_size, starting_rate);
@@ -48,17 +53,31 @@ where
 
         let (leaf_hash_params, two_to_one_params) = mt::default_config::<E>(&mut rng);
 
-        let whir_params = WhirParameters::<MerkleConfig<E>, PowStrategy> {
-            initial_statement: true,
-            security_level: 100,
-            pow_bits,
-            folding_factor: 4,
-            leaf_hash_params,
-            two_to_one_params,
-            soundness_type: SoundnessType::ConjectureList,
-            fold_optimisation: FoldType::ProverHelps,
-            _pow_parameters: Default::default(),
-            starting_log_inv_rate: starting_rate,
+        let whir_params = match partial_params {
+            Some(params) => WhirParameters::<MerkleConfig<E>, PowStrategy> {
+                initial_statement: true,
+                security_level: params.security_level,
+                pow_bits: params.pow_bits,
+                folding_factor: params.folding_factor,
+                leaf_hash_params,
+                two_to_one_params,
+                soundness_type: params.soundness_type,
+                fold_optimisation: params.fold_optimisation,
+                _pow_parameters: Default::default(),
+                starting_log_inv_rate: params.starting_log_inv_rate,
+            },
+            None => WhirParameters::<MerkleConfig<E>, PowStrategy> {
+                initial_statement: true,
+                security_level: 100,
+                pow_bits,
+                folding_factor: 4,
+                leaf_hash_params,
+                two_to_one_params,
+                soundness_type: SoundnessType::ConjectureList,
+                fold_optimisation: FoldType::ProverHelps,
+                _pow_parameters: Default::default(),
+                starting_log_inv_rate: starting_rate,
+            },
         };
         WhirConfig::<E, MerkleConfig<E>, PowStrategy>::new(mv_params, whir_params)
     }
@@ -188,7 +207,7 @@ mod tests {
     fn single_poly_verify() {
         let poly_size = 10;
         let num_coeffs = 1 << poly_size;
-        let pp = Whir::<F>::setup(poly_size, 1);
+        let pp = Whir::<F>::setup(poly_size, 1, None);
 
         let poly = CoefficientList::new(
             (0..num_coeffs)
@@ -216,7 +235,7 @@ mod tests {
         let poly_size = 10;
         let num_coeffs = 1 << poly_size;
         let num_polys = 1 << 3;
-        let pp = Whir::<F>::setup(poly_size, num_polys);
+        let pp = Whir::<F>::setup(poly_size, num_polys, None);
 
         let mut polys = Vec::new();
         for _ in 0..num_polys {

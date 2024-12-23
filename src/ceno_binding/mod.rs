@@ -4,6 +4,8 @@ use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use std::fmt::Debug;
 
+use crate::parameters::WhirPartialParameters;
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
@@ -19,7 +21,11 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
     type Poly: Clone;
     type Transcript;
 
-    fn setup(poly_size: usize, num_polys: usize) -> Self::Param;
+    fn setup(
+        poly_size: usize,
+        num_polys: usize,
+        params: Option<WhirPartialParameters>,
+    ) -> Self::Param;
 
     fn commit_and_write(
         pp: &Self::Param,

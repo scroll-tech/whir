@@ -168,6 +168,7 @@ where
     IOPattern: WhirIOPattern<E, Spec::MerkleConfig>,
 {
     type Param = WhirSetupParams<E>;
+    type Commitment = <Spec::MerkleConfig as Config>::InnerDigest;
     type CommitmentWithWitness = CommitmentWithWitness<E, Spec::MerkleConfig>;
     type Proof = WhirProofWrapper<Spec::MerkleConfig, E>;
     type Poly = CoefficientList<E::BasePrimeField>;
@@ -242,6 +243,7 @@ where
 
     fn verify(
         vp: &Self::Param,
+        comm: &Self::Commitment,
         point: &[E],
         eval: &E,
         proof: &Self::Proof,
@@ -258,7 +260,11 @@ where
             evaluations: vec![eval.clone()],
         };
 
-        verifier.verify(transcript, &statement, &proof.proof)?;
+        let digest = verifier.verify(transcript, &statement, &proof.proof)?;
+
+        if &digest != comm {
+            return Err(Error::CommitmentMismatchFromDigest);
+        }
 
         Ok(())
     }

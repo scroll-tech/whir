@@ -14,10 +14,13 @@ pub use nimue::plugins::ark::{FieldChallenges, FieldWriter};
 pub enum Error {
     #[error(transparent)]
     ProofError(#[from] nimue::ProofError),
+    #[error("CommitmentMismatchFromDigest")]
+    CommitmentMismatchFromDigest,
 }
 
 pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
     type Param: Clone + Debug + Serialize + DeserializeOwned;
+    type Commitment: Clone + Debug;
     type CommitmentWithWitness: Clone + Debug;
     type Proof: Clone + CanonicalSerialize + CanonicalDeserialize + Serialize + DeserializeOwned;
     type Poly: Clone + Debug + Serialize + DeserializeOwned;
@@ -58,6 +61,7 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
 
     fn verify(
         vp: &Self::Param,
+        comm: &Self::Commitment,
         point: &[E],
         eval: &E,
         proof: &Self::Proof,

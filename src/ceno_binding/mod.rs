@@ -1,41 +1,46 @@
 mod pcs;
+pub use ark_crypto_primitives::merkle_tree::Config;
+use nimue::{plugins::ark, Arthur, Merlin};
+pub use pcs::{DefaultHash, PowStrategy, Whir, WhirDefaultSpec, WhirSpec};
 
 use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
 
-#[derive(Debug, thiserror::Error)]
+pub use nimue::plugins::ark::{FieldChallenges, FieldWriter};
+
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
     ProofError(#[from] nimue::ProofError),
 }
 
 pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
-    type Param: Clone;
-    type CommitmentWithData;
-    type Proof: Clone + CanonicalSerialize + CanonicalDeserialize;
-    type Poly: Clone;
-    type Transcript;
+    type Param: Clone + Debug + Serialize + DeserializeOwned;
+    type CommitmentWithWitness: Clone + Debug;
+    type Proof: Clone + CanonicalSerialize + CanonicalDeserialize + Serialize + DeserializeOwned;
+    type Poly: Clone + Debug + Serialize + DeserializeOwned;
 
     fn setup(poly_size: usize) -> Self::Param;
 
     fn commit_and_write(
         pp: &Self::Param,
         poly: &Self::Poly,
-        transcript: &mut Self::Transcript,
-    ) -> Result<Self::CommitmentWithData, Error>;
+        transcript: &mut Merlin<DefaultHash>,
+    ) -> Result<Self::CommitmentWithWitness, Error>;
 
     fn batch_commit(
         pp: &Self::Param,
         polys: &[Self::Poly],
-    ) -> Result<Self::CommitmentWithData, Error>;
+    ) -> Result<Self::CommitmentWithWitness, Error>;
 
     fn open(
         pp: &Self::Param,
-        comm: Self::CommitmentWithData,
+        comm: Self::CommitmentWithWitness,
         point: &[E],
         eval: &E,
-        transcript: &mut Self::Transcript,
+        merlin: &mut Merlin<DefaultHash>,
     ) -> Result<Self::Proof, Error>;
 
     /// This is a simple version of batch open:
@@ -45,10 +50,10 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
     fn batch_open(
         pp: &Self::Param,
         polys: &[Self::Poly],
-        comm: Self::CommitmentWithData,
+        comm: Self::CommitmentWithWitness,
         point: &[E],
         evals: &[E],
-        transcript: &mut Self::Transcript,
+        transcript: &mut Merlin<DefaultHash>,
     ) -> Result<Self::Proof, Error>;
 
     fn verify(
@@ -56,7 +61,7 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
         point: &[E],
         eval: &E,
         proof: &Self::Proof,
-        transcript: &Self::Transcript,
+        transcript: &mut Arthur<DefaultHash>,
     ) -> Result<(), Error>;
 
     fn batch_verify(
@@ -64,6 +69,6 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
         point: &[E],
         evals: &[E],
         proof: &Self::Proof,
-        transcript: &mut Self::Transcript,
+        transcript: &mut Arthur<DefaultHash>,
     ) -> Result<(), Error>;
 }

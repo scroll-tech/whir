@@ -31,8 +31,8 @@ struct Args {
     #[arg(short = 'd', long, default_value = "20")]
     num_variables: usize,
 
-    #[arg(short = 'p', long = "num_polys", default_value = "1")]
-    num_polys: usize,
+    #[arg(short = 'm', long = "num_log_polys", default_value = "0")]
+    num_log_polys: usize,
 
     #[arg(short = 'r', long, default_value = "1")]
     rate: usize,
@@ -67,7 +67,8 @@ struct BenchmarkOutput {
 
     // Whir
     whir_argument_size: usize,
-    whir_prover_time: Duration,
+    whir_commit_time: Duration,
+    whir_open_time: Duration,
     whir_prover_hashes: usize,
     whir_verifier_time: Duration,
     whir_verifier_hashes: usize,
@@ -82,39 +83,40 @@ fn main() {
     match field {
         AvailableFields::Goldilocks1 => {
             use fields::Field64 as F;
-            run_whir::<F>(args)
+            run_whir_multi_poly::<F>(args)
         }
         AvailableFields::Goldilocks2 => {
             use fields::Field64_2 as F;
-            run_whir::<F>(args)
+            run_whir_multi_poly::<F>(args)
         }
         AvailableFields::Goldilocks3 => {
             use fields::Field64_3 as F;
-            run_whir::<F>(args)
+            run_whir_multi_poly::<F>(args)
         }
         AvailableFields::Field128 => {
             use fields::Field128 as F;
-            run_whir::<F>(args)
+            run_whir_multi_poly::<F>(args)
         }
         AvailableFields::Field192 => {
             use fields::Field192 as F;
-            run_whir::<F>(args)
+            run_whir_multi_poly::<F>(args)
         }
         AvailableFields::Field256 => {
             use fields::Field256 as F;
-            run_whir::<F>(args)
+            run_whir_multi_poly::<F>(args)
         }
     }
 }
 
-fn run_whir<F>(args: Args)
+#[allow(dead_code)]
+fn run_whir_single_poly<F>(args: Args)
 where
     F: FftField + CanonicalSerialize,
 {
     let security_level = args.security_level;
     let pow_bits = args.pow_bits.unwrap();
     let num_variables = args.num_variables;
-    let num_polys = args.num_polys;
+    let num_polys = 1 << args.num_log_polys;
     let starting_rate = args.rate;
     let reps = args.verifier_repetitions;
     let folding_factor = args.folding_factor;
@@ -141,7 +143,8 @@ where
     );
 
     let (
-        whir_prover_time,
+        whir_commit_time,
+        whir_open_time,
         whir_argument_size,
         whir_prover_hashes,
         whir_verifier_time,
@@ -173,12 +176,14 @@ where
         };
 
         HashCounter::reset();
-        let whir_prover_time = Instant::now();
-
+        let whir_commit_time = Instant::now();
         let witness = Whir::<F>::commit_and_write(&pp, &polynomial, &mut merlin).unwrap();
-        let proof = Whir::<F>::open(&pp, witness, &point, &eval, &mut merlin).unwrap();
+        let whir_commit_time = whir_commit_time.elapsed();
 
-        let whir_prover_time = whir_prover_time.elapsed();
+        let whir_open_time = Instant::now();
+        let proof = Whir::<F>::open(&pp, witness, &point, &eval, &mut merlin).unwrap();
+        let whir_open_time = whir_open_time.elapsed();
+
         let whir_argument_size = whir_proof_size(merlin.transcript(), &proof);
         let whir_prover_hashes = HashCounter::get();
 
@@ -196,7 +201,8 @@ where
         let whir_verifier_hashes = HashCounter::get() / reps;
 
         (
-            whir_prover_time,
+            whir_commit_time,
+            whir_open_time,
             whir_argument_size,
             whir_prover_hashes,
             whir_verifier_time,
@@ -216,7 +222,8 @@ where
         field: args.field,
 
         // Whir
-        whir_prover_time,
+        whir_commit_time,
+        whir_open_time,
         whir_argument_size,
         whir_prover_hashes,
         whir_verifier_time,
@@ -230,4 +237,178 @@ where
         .unwrap();
     use std::io::Write;
     writeln!(out_file, "{}", serde_json::to_string(&output).unwrap()).unwrap();
+
+    let mut csv_file = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open("outputs/summary.csv")
+        .unwrap();
+    let whir_commit_time = format!("{:.2}", whir_commit_time.as_secs_f64() * 1000.0);
+    let whir_open_time = format!("{:.2}", whir_open_time.as_secs_f64() * 1000.0);
+    writeln!(
+        csv_file,
+        "{},{},{},{},{},{}",
+        num_variables,
+        num_polys,
+        whir_commit_time,
+        whir_open_time,
+        whir_verifier_hashes,
+        whir_argument_size,
+    )
+    .unwrap();
+}
+
+fn run_whir_multi_poly<F>(args: Args)
+where
+    F: FftField + CanonicalSerialize,
+{
+    let security_level = args.security_level;
+    let pow_bits = args.pow_bits.unwrap();
+    let num_variables = args.num_variables;
+    let num_polys = 1 << args.num_log_polys;
+    let starting_rate = args.rate;
+    let reps = args.verifier_repetitions;
+    let folding_factor = args.folding_factor;
+    let soundness_type = args.soundness_type;
+    let fold_optimisation = args.fold_optimisation;
+
+    std::fs::create_dir_all("outputs").unwrap();
+
+    let num_coeffs = 1 << num_variables;
+
+    let partial_params = WhirPartialParameters {
+        security_level,
+        pow_bits,
+        folding_factor,
+        soundness_type,
+        fold_optimisation,
+        starting_log_inv_rate: starting_rate,
+    };
+
+    let mut polys = Vec::new();
+    for _ in 0..num_polys {
+        let poly = CoefficientList::new(
+            (0..num_coeffs)
+                .map(<F as Field>::BasePrimeField::from)
+                .collect(),
+        );
+        polys.push(poly);
+    }
+
+    let (
+        whir_commit_time,
+        whir_open_time,
+        whir_argument_size,
+        whir_prover_hashes,
+        whir_verifier_time,
+        whir_verifier_hashes,
+    ) = {
+        // Run PCS
+        use rand::prelude::*;
+        use whir::poly_utils::MultilinearPoint;
+        use whir::whir::{iopattern::WhirIOPattern, verifier::Verifier, whir_proof_size};
+
+        let pp = Whir::<F>::setup(num_variables, num_polys, Some(partial_params));
+        if !pp.check_pow_bits() {
+            println!("WARN: more PoW bits required than what specified.");
+        }
+
+        let io = IOPattern::<DefaultHash>::new("🌪️")
+            .commit_statement(&pp)
+            .add_whir_proof(&pp);
+        let mut merlin = io.to_merlin();
+
+        let mut rng = rand::thread_rng();
+        let point: Vec<F> = (0..num_variables)
+            .map(|_| F::from(rng.gen::<u64>()))
+            .collect();
+        let evals = polys
+            .iter()
+            .map(|poly| poly.evaluate_at_extension(&MultilinearPoint(point.clone())))
+            .collect::<Vec<_>>();
+
+        HashCounter::reset();
+        let whir_commit_time = Instant::now();
+        let witness = Whir::<F>::batch_commit_and_write(&pp, &polys, &mut merlin).unwrap();
+        let whir_commit_time = whir_commit_time.elapsed();
+
+        let whir_open_time = Instant::now();
+        let proof =
+            Whir::<F>::simple_batch_open(&pp, witness, &point, &evals, &mut merlin).unwrap();
+        let whir_open_time = whir_open_time.elapsed();
+
+        let whir_argument_size = whir_proof_size(merlin.transcript(), &proof);
+        let whir_prover_hashes = HashCounter::get();
+
+        // Just not to count that initial inversion (which could be precomputed)
+        let verifier = Verifier::new(pp);
+
+        HashCounter::reset();
+        let whir_verifier_time = Instant::now();
+        for _ in 0..reps {
+            let mut arthur = io.to_arthur(merlin.transcript());
+            verifier
+                .simple_batch_verify(&mut arthur, &point, &evals, &proof)
+                .unwrap();
+        }
+
+        let whir_verifier_time = whir_verifier_time.elapsed();
+        let whir_verifier_hashes = HashCounter::get() / reps;
+
+        (
+            whir_commit_time,
+            whir_open_time,
+            whir_argument_size,
+            whir_prover_hashes,
+            whir_verifier_time,
+            whir_verifier_hashes,
+        )
+    };
+
+    let output = BenchmarkOutput {
+        security_level,
+        pow_bits,
+        starting_rate,
+        num_variables,
+        num_polys,
+        repetitions: reps,
+        folding_factor,
+        soundness_type,
+        field: args.field,
+
+        // Whir
+        whir_commit_time,
+        whir_open_time,
+        whir_argument_size,
+        whir_prover_hashes,
+        whir_verifier_time,
+        whir_verifier_hashes,
+    };
+
+    let mut out_file = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open("outputs/bench_output.json")
+        .unwrap();
+    use std::io::Write;
+    writeln!(out_file, "{}", serde_json::to_string(&output).unwrap()).unwrap();
+
+    let mut csv_file = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open("outputs/summary.csv")
+        .unwrap();
+    let whir_commit_time = format!("{:.2}", whir_commit_time.as_secs_f64() * 1000.0);
+    let whir_open_time = format!("{:.2}", whir_open_time.as_secs_f64() * 1000.0);
+    writeln!(
+        csv_file,
+        "{},{},{},{},{},{}",
+        num_variables,
+        num_polys,
+        whir_commit_time,
+        whir_open_time,
+        whir_verifier_hashes,
+        whir_argument_size,
+    )
+    .unwrap();
 }

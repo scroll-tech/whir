@@ -570,7 +570,11 @@ where
         let compute_dot_product =
             |evals: &[F], coeff: &[F]| -> F { zip_eq(evals, coeff).map(|(a, b)| *a * *b).sum() };
 
-        let random_coeff = utils::generate_random_vector_batch_verify(arthur, num_polys)?;
+        let random_coeff = if num_polys > 1 {
+            utils::generate_random_vector_batch_verify(arthur, num_polys)?
+        } else {
+            vec![F::ONE]
+        };
 
         let initial_claims: Vec<_> = parsed_commitment
             .ood_points

@@ -102,6 +102,18 @@ impl Display for FoldType {
     }
 }
 
+/// same fields in WhirParameters
+/// without merkle/pow params
+#[derive(Clone)]
+pub struct WhirPartialParameters {
+    pub starting_log_inv_rate: usize,
+    pub folding_factor: usize,
+    pub soundness_type: SoundnessType,
+    pub security_level: usize,
+    pub pow_bits: usize,
+    pub fold_optimisation: FoldType,
+}
+
 #[derive(Clone)]
 pub struct WhirParameters<MerkleConfig, PowStrategy>
 where

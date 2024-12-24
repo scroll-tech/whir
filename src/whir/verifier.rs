@@ -211,7 +211,7 @@ where
             let combined_answers: Vec<_> = answers
                 .into_iter()
                 .map(|raw_answer| {
-                    if batched_randomness.len() > 0 {
+                    if batched_randomness.len() > 0 && r == 0 {
                         let chunk_size = 1 << self.params.folding_factor;
                         let num_polys = self.params.mv_parameters.num_polys;
                         let mut res = vec![F::ZERO; chunk_size];
@@ -245,7 +245,6 @@ where
                 sumcheck_rounds.push((sumcheck_poly, folding_randomness_single));
 
                 if round_params.folding_pow_bits > 0. {
-                    println!("pow");
                     arthur.challenge_pow::<PowStrategy>(round_params.folding_pow_bits)?;
                 }
             }
@@ -570,7 +569,11 @@ where
         let compute_dot_product =
             |evals: &[F], coeff: &[F]| -> F { zip_eq(evals, coeff).map(|(a, b)| *a * *b).sum() };
 
-        let random_coeff = utils::generate_random_vector_batch_verify(arthur, num_polys)?;
+        let random_coeff = if num_polys > 1 {
+            utils::generate_random_vector_batch_verify(arthur, num_polys)?
+        } else {
+            vec![F::ONE]
+        };
 
         let initial_claims: Vec<_> = parsed_commitment
             .ood_points

@@ -128,7 +128,11 @@ where
         let compute_dot_product =
             |evals: &[F], coeff: &[F]| -> F { zip_eq(evals, coeff).map(|(a, b)| *a * *b).sum() };
 
-        let random_coeff = utils::generate_random_vector_batch_open(merlin, witness.polys.len())?;
+        let random_coeff = if self.0.mv_parameters.num_polys > 1 {
+            utils::generate_random_vector_batch_open(merlin, witness.polys.len())?
+        } else {
+            vec![F::ONE]
+        };
 
         let initial_claims: Vec<_> = witness
             .ood_points

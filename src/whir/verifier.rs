@@ -211,7 +211,7 @@ where
             let combined_answers: Vec<_> = answers
                 .into_iter()
                 .map(|raw_answer| {
-                    if batched_randomness.len() > 0 {
+                    if batched_randomness.len() > 0 && r == 0 {
                         let chunk_size = 1 << self.params.folding_factor;
                         let num_polys = self.params.mv_parameters.num_polys;
                         let mut res = vec![F::ZERO; chunk_size];
@@ -245,7 +245,6 @@ where
                 sumcheck_rounds.push((sumcheck_poly, folding_randomness_single));
 
                 if round_params.folding_pow_bits > 0. {
-                    println!("pow");
                     arthur.challenge_pow::<PowStrategy>(round_params.folding_pow_bits)?;
                 }
             }

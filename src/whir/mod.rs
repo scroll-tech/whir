@@ -4,11 +4,11 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use crate::poly_utils::MultilinearPoint;
 
 pub mod committer;
+pub mod fs_utils;
 pub mod iopattern;
 pub mod parameters;
 pub mod prover;
 pub mod verifier;
-pub mod fs_utils;
 
 #[derive(Debug, Clone, Default)]
 pub struct Statement<F> {
@@ -67,7 +67,7 @@ mod tests {
         let mut rng = ark_std::test_rng();
         let (leaf_hash_params, two_to_one_params) = merkle_tree::default_config::<F>(&mut rng);
 
-        let mv_params = MultivariateParameters::<F>::new(num_variables);
+        let mv_params = MultivariateParameters::<F>::new(num_variables, 1);
 
         let whir_params = WhirParameters::<MerkleConfig, PowStrategy> {
             initial_statement: true,

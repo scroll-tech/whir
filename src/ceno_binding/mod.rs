@@ -1,7 +1,7 @@
 mod pcs;
 pub use ark_crypto_primitives::merkle_tree::Config;
 use nimue::{plugins::ark, Arthur, Merlin};
-pub use pcs::{DefaultHash, Whir, WhirDefaultSpec, WhirSpec};
+pub use pcs::{DefaultHash, PowStrategy, Whir, WhirDefaultSpec, WhirSpec};
 
 use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};

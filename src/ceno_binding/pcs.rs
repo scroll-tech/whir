@@ -26,7 +26,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 
-type PowStrategy = Blake3PoW;
+pub type PowStrategy = Blake3PoW;
 // type WhirPCSConfig<E> = WhirConfig<E, MerkleTreeParams<E>, PowStrategy>;
 
 pub trait WhirSpec<E: FftField>: Clone {

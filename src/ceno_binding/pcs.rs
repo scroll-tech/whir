@@ -34,10 +34,23 @@ pub trait WhirSpec<E: FftField>: Default + std::fmt::Debug + Clone {
     fn get_parameters(
         num_variables: usize,
     ) -> WhirParameters<MerkleConfigOf<Self, E>, PowOf<Self, E>>;
+
+    fn prepare_io_pattern(num_variables: usize) -> IOPattern {
+        let whir_params = Self::get_parameters(num_variables);
+        let mv_params = MultivariateParameters::new(num_variables);
+        let params = ConfigOf::<Self, E>::new(mv_params, whir_params);
+
+        let io = IOPattern::<DefaultHash>::new("🌪️");
+        let io = commit_statement_to_io_pattern::<E, Self>(io, &params);
+        let io = add_whir_proof_to_io_pattern::<E, Self>(io, &params);
+
+        io
+    }
 }
 
 pub type MerkleConfigOf<Spec, E> =
     <<Spec as WhirSpec<E>>::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::MerkleConfig;
+type ConfigOf<Spec, E> = WhirConfig<E, MerkleConfigOf<Spec, E>, PowOf<Spec, E>>;
 
 pub fn commit_statement_to_io_pattern<E: FftField, Spec: WhirSpec<E>>(
     iopattern: IOPattern,

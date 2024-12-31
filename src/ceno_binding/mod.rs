@@ -2,9 +2,7 @@ mod merkle_config;
 mod pcs;
 pub use ark_crypto_primitives::merkle_tree::Config;
 use nimue::{Arthur, Merlin};
-pub use pcs::{
-    add_digest_to_merlin, DefaultHash, InnerDigestOf, PowStrategy, Whir, WhirDefaultSpec, WhirSpec,
-};
+pub use pcs::{add_digest_to_merlin, DefaultHash, InnerDigestOf, Whir, WhirDefaultSpec, WhirSpec};
 
 use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};

@@ -26,19 +26,22 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 
-pub type PowStrategy = Blake3PoW;
-// type WhirPCSConfig<E> = WhirConfig<E, MerkleTreeParams<E>, PowStrategy>;
-
 pub trait WhirSpec<E: FftField>: Default + std::fmt::Debug + Clone {
     type MerkleConfigWrapper: WhirMerkleConfigWrapper<E>;
     fn get_parameters(
         num_variables: usize,
     ) -> WhirParameters<MerkleConfigOf<Self, E>, PowOf<Self, E>>;
 
-    fn prepare_io_pattern(num_variables: usize) -> IOPattern {
+    fn prepare_whir_config(
+        num_variables: usize,
+    ) -> WhirConfig<E, MerkleConfigOf<Self, E>, PowOf<Self, E>> {
         let whir_params = Self::get_parameters(num_variables);
         let mv_params = MultivariateParameters::new(num_variables);
-        let params = ConfigOf::<Self, E>::new(mv_params, whir_params);
+        ConfigOf::<Self, E>::new(mv_params, whir_params)
+    }
+
+    fn prepare_io_pattern(num_variables: usize) -> IOPattern {
+        let params = Self::prepare_whir_config(num_variables);
 
         let io = IOPattern::<DefaultHash>::new("🌪️");
         let io = commit_statement_to_io_pattern::<E, Self>(io, &params);
@@ -87,12 +90,10 @@ pub struct WhirDefaultSpec;
 
 impl<E: FftField> WhirSpec<E> for WhirDefaultSpec {
     type MerkleConfigWrapper = Blake3ConfigWrapper<E>;
-    fn get_parameters(
-        num_variables: usize,
-    ) -> WhirParameters<MerkleConfigOf<Self, E>, PowStrategy> {
+    fn get_parameters(num_variables: usize) -> WhirParameters<MerkleConfigOf<Self, E>, Blake3PoW> {
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
         let (leaf_hash_params, two_to_one_params) = mt::default_config::<E>(&mut rng);
-        WhirParameters::<MerkleConfigOf<Self, E>, PowStrategy> {
+        WhirParameters::<MerkleConfigOf<Self, E>, Blake3PoW> {
             initial_statement: true,
             security_level: 100,
             pow_bits: default_max_pow(num_variables, 1),
@@ -228,10 +229,7 @@ where
         poly: &Self::Poly,
         merlin: &mut Merlin<DefaultHash>,
     ) -> Result<Self::CommitmentWithWitness, Error> {
-        let whir_params = Spec::get_parameters(pp.num_variables);
-        let mv_params = MultivariateParameters::new(pp.num_variables);
-        let params =
-            WhirConfig::<E, MerkleConfigOf<Spec, E>, PowOf<Spec, E>>::new(mv_params, whir_params);
+        let params = Spec::prepare_whir_config(pp.num_variables);
 
         let committer = Committer::new(params);
         let witness =
@@ -257,10 +255,7 @@ where
         eval: &E,
         merlin: &mut Merlin<DefaultHash>,
     ) -> Result<Self::Proof, Error> {
-        let whir_params = Spec::get_parameters(pp.num_variables);
-        let mv_params = MultivariateParameters::new(pp.num_variables);
-        let params =
-            WhirConfig::<E, MerkleConfigOf<Spec, E>, PowOf<Spec, E>>::new(mv_params, whir_params);
+        let params = Spec::prepare_whir_config(pp.num_variables);
 
         let prover = Prover(params);
         let statement = Statement {
@@ -300,12 +295,8 @@ where
         proof: &Self::Proof,
         arthur: &mut Arthur<DefaultHash>,
     ) -> Result<(), Error> {
-        let whir_params = Spec::get_parameters(vp.num_variables);
-        let mv_params = MultivariateParameters::new(vp.num_variables);
-        let params =
-            WhirConfig::<E, MerkleConfigOf<Spec, E>, PowOf<Spec, E>>::new(mv_params, whir_params);
-
-        let verifier = Verifier::new(params.clone());
+        let params = Spec::prepare_whir_config(vp.num_variables);
+        let verifier = Verifier::new(params);
 
         let statement = Statement {
             points: vec![MultilinearPoint(point.to_vec())],

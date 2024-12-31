@@ -1,7 +1,12 @@
+mod merkle_config;
 mod pcs;
 pub use ark_crypto_primitives::merkle_tree::Config;
-use nimue::{plugins::ark, Arthur, Merlin};
-pub use pcs::{DefaultHash, PowStrategy, Whir, WhirDefaultSpec, WhirSpec};
+use nimue::{Arthur, Merlin};
+pub use pcs::{
+    add_digest_to_merlin, add_whir_proof_to_io_pattern, commit_statement_to_io_pattern,
+    DefaultHash, InnerDigestOf, MerkleConfigOf, PowOf, PowStrategy, Whir, WhirDefaultSpec,
+    WhirSpec,
+};
 
 use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
@@ -9,6 +14,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
 
 pub use nimue::plugins::ark::{FieldChallenges, FieldWriter};
+pub use nimue::ProofResult;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {

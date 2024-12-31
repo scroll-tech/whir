@@ -44,8 +44,13 @@ pub trait WhirSpec<E: FftField>: Default + std::fmt::Debug + Clone {
         let params = Self::prepare_whir_config(num_variables);
 
         let io = IOPattern::<DefaultHash>::new("🌪️");
-        let io = commit_statement_to_io_pattern::<E, Self>(io, &params);
-        let io = add_whir_proof_to_io_pattern::<E, Self>(io, &params);
+        let io = <Self::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::commit_statement_to_io_pattern(
+            io, &params,
+        );
+        let io =
+            <Self::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::add_whir_proof_to_io_pattern(
+                io, &params,
+            );
 
         io
     }
@@ -54,24 +59,6 @@ pub trait WhirSpec<E: FftField>: Default + std::fmt::Debug + Clone {
 type MerkleConfigOf<Spec, E> =
     <<Spec as WhirSpec<E>>::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::MerkleConfig;
 type ConfigOf<Spec, E> = WhirConfig<E, MerkleConfigOf<Spec, E>, PowOf<Spec, E>>;
-
-fn commit_statement_to_io_pattern<E: FftField, Spec: WhirSpec<E>>(
-    iopattern: IOPattern,
-    params: &WhirConfig<E, MerkleConfigOf<Spec, E>, PowOf<Spec, E>>,
-) -> IOPattern {
-    <Spec::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::commit_statement_to_io_pattern(
-        iopattern, params,
-    )
-}
-
-fn add_whir_proof_to_io_pattern<E: FftField, Spec: WhirSpec<E>>(
-    iopattern: IOPattern,
-    params: &WhirConfig<E, MerkleConfigOf<Spec, E>, PowOf<Spec, E>>,
-) -> IOPattern {
-    <Spec::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::add_whir_proof_to_io_pattern(
-        iopattern, params,
-    )
-}
 
 pub fn add_digest_to_merlin<E: FftField, Spec: WhirSpec<E>>(
     merlin: &mut Merlin,

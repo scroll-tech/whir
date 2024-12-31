@@ -48,11 +48,11 @@ pub trait WhirSpec<E: FftField>: Default + std::fmt::Debug + Clone {
     }
 }
 
-pub type MerkleConfigOf<Spec, E> =
+type MerkleConfigOf<Spec, E> =
     <<Spec as WhirSpec<E>>::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::MerkleConfig;
 type ConfigOf<Spec, E> = WhirConfig<E, MerkleConfigOf<Spec, E>, PowOf<Spec, E>>;
 
-pub fn commit_statement_to_io_pattern<E: FftField, Spec: WhirSpec<E>>(
+fn commit_statement_to_io_pattern<E: FftField, Spec: WhirSpec<E>>(
     iopattern: IOPattern,
     params: &WhirConfig<E, MerkleConfigOf<Spec, E>, PowOf<Spec, E>>,
 ) -> IOPattern {
@@ -61,7 +61,7 @@ pub fn commit_statement_to_io_pattern<E: FftField, Spec: WhirSpec<E>>(
     )
 }
 
-pub fn add_whir_proof_to_io_pattern<E: FftField, Spec: WhirSpec<E>>(
+fn add_whir_proof_to_io_pattern<E: FftField, Spec: WhirSpec<E>>(
     iopattern: IOPattern,
     params: &WhirConfig<E, MerkleConfigOf<Spec, E>, PowOf<Spec, E>>,
 ) -> IOPattern {
@@ -79,7 +79,7 @@ pub fn add_digest_to_merlin<E: FftField, Spec: WhirSpec<E>>(
 
 pub type InnerDigestOf<Spec, E> = <MerkleConfigOf<Spec, E> as Config>::InnerDigest;
 
-pub type PowOf<Spec, E> =
+type PowOf<Spec, E> =
     <<Spec as WhirSpec<E>>::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::PowStrategy;
 
 #[derive(Debug, Clone, Default)]

@@ -1,8 +1,7 @@
 mod merkle_config;
 mod pcs;
 pub use ark_crypto_primitives::merkle_tree::Config;
-use nimue::{Arthur, Merlin};
-pub use pcs::{add_digest_to_merlin, DefaultHash, InnerDigestOf, Whir, WhirDefaultSpec, WhirSpec};
+pub use pcs::{DefaultHash, InnerDigestOf, Whir, WhirDefaultSpec, WhirSpec};
 
 use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
@@ -20,6 +19,11 @@ pub enum Error {
     CommitmentMismatchFromDigest,
 }
 
+/// The trait for a non-interactive polynomial commitment scheme.
+/// This trait serves as the intermediate step between WHIR and the
+/// trait required in Ceno mpcs. Because Ceno and the WHIR implementation
+/// in this crate assume different types of transcripts, to connect
+/// them we can provide a non-interactive interface from WHIR.
 pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
     type Param: Clone + Debug + Serialize + DeserializeOwned;
     type Commitment: Clone + Debug;
@@ -29,11 +33,7 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
 
     fn setup(poly_size: usize) -> Self::Param;
 
-    fn commit_and_write(
-        pp: &Self::Param,
-        poly: &Self::Poly,
-        transcript: &mut Merlin<DefaultHash>,
-    ) -> Result<Self::CommitmentWithWitness, Error>;
+    fn commit(pp: &Self::Param, poly: &Self::Poly) -> Result<Self::CommitmentWithWitness, Error>;
 
     fn batch_commit(
         pp: &Self::Param,
@@ -45,7 +45,6 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
         comm: Self::CommitmentWithWitness,
         point: &[E],
         eval: &E,
-        merlin: &mut Merlin<DefaultHash>,
     ) -> Result<Self::Proof, Error>;
 
     /// This is a simple version of batch open:
@@ -58,7 +57,6 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
         comm: Self::CommitmentWithWitness,
         point: &[E],
         evals: &[E],
-        transcript: &mut Merlin<DefaultHash>,
     ) -> Result<Self::Proof, Error>;
 
     fn verify(
@@ -67,7 +65,6 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
         point: &[E],
         eval: &E,
         proof: &Self::Proof,
-        transcript: &mut Arthur<DefaultHash>,
     ) -> Result<(), Error>;
 
     fn batch_verify(
@@ -75,6 +72,5 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
         point: &[E],
         evals: &[E],
         proof: &Self::Proof,
-        transcript: &mut Arthur<DefaultHash>,
     ) -> Result<(), Error>;
 }

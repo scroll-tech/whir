@@ -17,8 +17,9 @@ use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::log2;
-pub use nimue::{Arthur, DefaultHash, Merlin};
-use nimue::{IOPattern, ProofResult};
+use nimue::plugins::ark::{FieldChallenges, FieldWriter};
+pub use nimue::DefaultHash;
+use nimue::IOPattern;
 use nimue_pow::blake3::Blake3PoW;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
@@ -59,13 +60,6 @@ pub trait WhirSpec<E: FftField>: Default + std::fmt::Debug + Clone {
 type MerkleConfigOf<Spec, E> =
     <<Spec as WhirSpec<E>>::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::MerkleConfig;
 type ConfigOf<Spec, E> = WhirConfig<E, MerkleConfigOf<Spec, E>, PowOf<Spec, E>>;
-
-pub fn add_digest_to_merlin<E: FftField, Spec: WhirSpec<E>>(
-    merlin: &mut Merlin,
-    digest: InnerDigestOf<Spec, E>,
-) -> ProofResult<()> {
-    <Spec::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::add_digest_to_merlin(merlin, digest)
-}
 
 pub type InnerDigestOf<Spec, E> = <MerkleConfigOf<Spec, E> as Config>::InnerDigest;
 
@@ -211,16 +205,18 @@ where
         }
     }
 
-    fn commit_and_write(
-        pp: &Self::Param,
-        poly: &Self::Poly,
-        merlin: &mut Merlin<DefaultHash>,
-    ) -> Result<Self::CommitmentWithWitness, Error> {
+    fn commit(pp: &Self::Param, poly: &Self::Poly) -> Result<Self::CommitmentWithWitness, Error> {
         let params = Spec::prepare_whir_config(pp.num_variables);
+
+        // The merlin here is just for satisfying the interface of
+        // WHIR, which only provides a commit_and_write function.
+        // It will be abandoned once this function finishes.
+        let io = Spec::prepare_io_pattern(pp.num_variables);
+        let mut merlin = io.to_merlin();
 
         let committer = Committer::new(params);
         let witness =
-            Spec::MerkleConfigWrapper::commit_to_merlin(&committer, merlin, poly.clone())?;
+            Spec::MerkleConfigWrapper::commit_to_merlin(&committer, &mut merlin, poly.clone())?;
 
         Ok(CommitmentWithWitness {
             commitment: witness.merkle_tree.root(),
@@ -240,9 +236,33 @@ where
         witness: Self::CommitmentWithWitness,
         point: &[E],
         eval: &E,
-        merlin: &mut Merlin<DefaultHash>,
     ) -> Result<Self::Proof, Error> {
         let params = Spec::prepare_whir_config(pp.num_variables);
+        let io = Spec::prepare_io_pattern(pp.num_variables);
+        let mut merlin = io.to_merlin();
+        // In WHIR, the prover writes the commitment to the transcript, then
+        // the commitment is read from the transcript by the verifier, after
+        // the transcript is transformed into a arthur transcript.
+        // Here we repeat whatever the prover does.
+        // TODO: This is a hack. There should be a better design that does not
+        // require non-black-box knowledge of the inner working of WHIR.
+
+        <Spec::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::add_digest_to_merlin(
+            &mut merlin,
+            witness.commitment.clone(),
+        )
+        .map_err(Error::ProofError)?;
+        let ood_answers = witness.ood_answers();
+        if ood_answers.len() > 0 {
+            let mut ood_points = vec![<E as ark_ff::AdditiveGroup>::ZERO; ood_answers.len()];
+            merlin
+                .fill_challenge_scalars(&mut ood_points)
+                .map_err(Error::ProofError)?;
+            merlin
+                .add_scalars(&ood_answers)
+                .map_err(Error::ProofError)?;
+        }
+        // Now the Merlin transcript is ready to pass to the verifier.
 
         let prover = Prover(params);
         let statement = Statement {
@@ -252,7 +272,7 @@ where
 
         let proof = Spec::MerkleConfigWrapper::prove_with_merlin(
             &prover,
-            merlin,
+            &mut merlin,
             statement,
             witness.witness,
         )?;
@@ -269,7 +289,6 @@ where
         _comm: Self::CommitmentWithWitness,
         _point: &[E],
         _evals: &[E],
-        _transcript: &mut Merlin<DefaultHash>,
     ) -> Result<Self::Proof, Error> {
         todo!()
     }
@@ -280,10 +299,11 @@ where
         point: &[E],
         eval: &E,
         proof: &Self::Proof,
-        arthur: &mut Arthur<DefaultHash>,
     ) -> Result<(), Error> {
         let params = Spec::prepare_whir_config(vp.num_variables);
         let verifier = Verifier::new(params);
+        let io = Spec::prepare_io_pattern(vp.num_variables);
+        let mut arthur = io.to_arthur(&proof.transcript);
 
         let statement = Statement {
             points: vec![MultilinearPoint(point.to_vec())],
@@ -292,7 +312,7 @@ where
 
         let digest = Spec::MerkleConfigWrapper::verify_with_arthur(
             &verifier,
-            arthur,
+            &mut arthur,
             &statement,
             &proof.proof,
         )?;
@@ -309,7 +329,6 @@ where
         _point: &[E],
         _evals: &[E],
         _proof: &Self::Proof,
-        _transcript: &mut Arthur<DefaultHash>,
     ) -> Result<(), Error> {
         todo!()
     }

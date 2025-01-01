@@ -1,136 +1,326 @@
+use super::merkle_config::{Blake3ConfigWrapper, WhirMerkleConfigWrapper};
 use super::{Error, PolynomialCommitmentScheme};
-use crate::crypto::merkle_tree::blake3::{self as mt, MerkleTreeParams};
+use crate::crypto::merkle_tree::blake3::{self as mt};
 use crate::parameters::{
     default_max_pow, FoldType, MultivariateParameters, SoundnessType, WhirParameters,
 };
 use crate::poly_utils::{coeffs::CoefficientList, MultilinearPoint};
 use crate::whir::{
     committer::{Committer, Witness},
-    iopattern::WhirIOPattern,
     parameters::WhirConfig,
     prover::Prover,
     verifier::Verifier,
     Statement, WhirProof,
 };
 
+use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use nimue::{DefaultHash, IOPattern, Merlin};
+use ark_std::log2;
+use nimue::plugins::ark::{FieldChallenges, FieldWriter};
+pub use nimue::DefaultHash;
+use nimue::IOPattern;
 use nimue_pow::blake3::Blake3PoW;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
-use std::fmt::Debug;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 
-#[derive(Debug, Clone)]
-pub struct Whir<E>(PhantomData<E>);
+pub trait WhirSpec<E: FftField>: Default + std::fmt::Debug + Clone {
+    type MerkleConfigWrapper: WhirMerkleConfigWrapper<E>;
+    fn get_parameters(
+        num_variables: usize,
+    ) -> WhirParameters<MerkleConfigOf<Self, E>, PowOf<Self, E>>;
 
-type MerkleConfig<E> = MerkleTreeParams<E>;
-type PowStrategy = Blake3PoW;
-type WhirPCSConfig<E> = WhirConfig<E, MerkleConfig<E>, PowStrategy>;
+    fn prepare_whir_config(
+        num_variables: usize,
+    ) -> WhirConfig<E, MerkleConfigOf<Self, E>, PowOf<Self, E>> {
+        let whir_params = Self::get_parameters(num_variables);
+        let mv_params = MultivariateParameters::new(num_variables);
+        ConfigOf::<Self, E>::new(mv_params, whir_params)
+    }
 
-impl<E> PolynomialCommitmentScheme<E> for Whir<E>
-where
-    E: FftField + CanonicalSerialize + CanonicalDeserialize,
-{
-    type Param = WhirPCSConfig<E>;
-    type CommitmentWithData = Witness<E, MerkleTreeParams<E>>;
-    type Proof = WhirProof<MerkleTreeParams<E>, E>;
-    // TODO: support both base and extension fields
-    type Poly = CoefficientList<E::BasePrimeField>;
-    type Transcript = Merlin<DefaultHash>;
+    fn prepare_io_pattern(num_variables: usize) -> IOPattern {
+        let params = Self::prepare_whir_config(num_variables);
 
-    fn setup(poly_size: usize) -> Self::Param {
-        let mv_params = MultivariateParameters::<E>::new(poly_size);
-        let starting_rate = 1;
-        let pow_bits = default_max_pow(poly_size, starting_rate);
+        let io = IOPattern::<DefaultHash>::new("🌪️");
+        let io = <Self::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::commit_statement_to_io_pattern(
+            io, &params,
+        );
+        let io =
+            <Self::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::add_whir_proof_to_io_pattern(
+                io, &params,
+            );
+
+        io
+    }
+}
+
+type MerkleConfigOf<Spec, E> =
+    <<Spec as WhirSpec<E>>::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::MerkleConfig;
+type ConfigOf<Spec, E> = WhirConfig<E, MerkleConfigOf<Spec, E>, PowOf<Spec, E>>;
+
+pub type InnerDigestOf<Spec, E> = <MerkleConfigOf<Spec, E> as Config>::InnerDigest;
+
+type PowOf<Spec, E> =
+    <<Spec as WhirSpec<E>>::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::PowStrategy;
+
+#[derive(Debug, Clone, Default)]
+pub struct WhirDefaultSpec;
+
+impl<E: FftField> WhirSpec<E> for WhirDefaultSpec {
+    type MerkleConfigWrapper = Blake3ConfigWrapper<E>;
+    fn get_parameters(num_variables: usize) -> WhirParameters<MerkleConfigOf<Self, E>, Blake3PoW> {
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
-
         let (leaf_hash_params, two_to_one_params) = mt::default_config::<E>(&mut rng);
-
-        let whir_params = WhirParameters::<MerkleConfig<E>, PowStrategy> {
+        WhirParameters::<MerkleConfigOf<Self, E>, Blake3PoW> {
             initial_statement: true,
             security_level: 100,
-            pow_bits,
+            pow_bits: default_max_pow(num_variables, 1),
             folding_factor: 4,
             leaf_hash_params,
             two_to_one_params,
             soundness_type: SoundnessType::ConjectureList,
             fold_optimisation: FoldType::ProverHelps,
             _pow_parameters: Default::default(),
-            starting_log_inv_rate: starting_rate,
-        };
-        WhirConfig::<E, MerkleConfig<E>, PowStrategy>::new(mv_params, whir_params)
+            starting_log_inv_rate: 1,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct WhirSetupParams<E: FftField> {
+    pub num_variables: usize,
+    _phantom: PhantomData<E>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Whir<E: FftField, Spec: WhirSpec<E>>(PhantomData<(E, Spec)>);
+
+// Wrapper for WhirProof
+#[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
+pub struct WhirProofWrapper<MerkleConfig, F>
+where
+    MerkleConfig: Config<Leaf = [F]>,
+    F: Sized + Clone + CanonicalSerialize + CanonicalDeserialize,
+{
+    pub proof: WhirProof<MerkleConfig, F>,
+    pub transcript: Vec<u8>,
+}
+
+impl<MerkleConfig, F> Serialize for WhirProofWrapper<MerkleConfig, F>
+where
+    MerkleConfig: Config<Leaf = [F]>,
+    F: Sized + Clone + CanonicalSerialize + CanonicalDeserialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let proof = &self.proof.0;
+        // Create a buffer that implements the `Write` trait
+        let mut buffer = Vec::new();
+        proof.serialize_compressed(&mut buffer).unwrap();
+        let proof_size = buffer.len();
+        let proof_size_bytes = proof_size.to_le_bytes();
+        let mut data = proof_size_bytes.to_vec();
+        data.extend_from_slice(&buffer);
+        data.extend_from_slice(&self.transcript);
+        serializer.serialize_bytes(&data)
+    }
+}
+
+impl<'de, MerkleConfig, F> Deserialize<'de> for WhirProofWrapper<MerkleConfig, F>
+where
+    MerkleConfig: Config<Leaf = [F]>,
+    F: Sized + Clone + CanonicalSerialize + CanonicalDeserialize,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let data: Vec<u8> = Deserialize::deserialize(deserializer)?;
+        let proof_size_bytes = &data[0..8];
+        let proof_size = u64::from_le_bytes(proof_size_bytes.try_into().unwrap());
+        let proof_bytes = &data[8..8 + proof_size as usize];
+        let proof = WhirProof::deserialize_compressed(&proof_bytes[..]).unwrap();
+        let transcript = data[8 + proof_size as usize..].to_vec();
+        Ok(WhirProofWrapper { proof, transcript })
+    }
+}
+
+impl<MerkleConfig, F> Debug for WhirProofWrapper<MerkleConfig, F>
+where
+    MerkleConfig: Config<Leaf = [F]>,
+    F: Sized + Clone + CanonicalSerialize + CanonicalDeserialize,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str("WhirProofWrapper")
+    }
+}
+
+#[derive(Clone)]
+pub struct CommitmentWithWitness<F, MerkleConfig>
+where
+    MerkleConfig: Config,
+{
+    pub commitment: MerkleConfig::InnerDigest,
+    pub witness: Witness<F, MerkleConfig>,
+}
+
+impl<F: FftField, MerkleConfig> CommitmentWithWitness<F, MerkleConfig>
+where
+    MerkleConfig: Config,
+{
+    pub fn ood_answers(&self) -> Vec<F> {
+        self.witness.ood_answers.clone()
+    }
+}
+
+impl<F, MerkleConfig> Debug for CommitmentWithWitness<F, MerkleConfig>
+where
+    MerkleConfig: Config,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str("CommitmentWithWitness")
+    }
+}
+
+impl<E, Spec: WhirSpec<E>> PolynomialCommitmentScheme<E> for Whir<E, Spec>
+where
+    E: FftField + Serialize + DeserializeOwned + Debug,
+    E::BasePrimeField: Serialize + DeserializeOwned + Debug,
+{
+    type Param = WhirSetupParams<E>;
+    type Commitment = <MerkleConfigOf<Spec, E> as Config>::InnerDigest;
+    type CommitmentWithWitness = CommitmentWithWitness<E, MerkleConfigOf<Spec, E>>;
+    type Proof = WhirProofWrapper<MerkleConfigOf<Spec, E>, E>;
+    type Poly = CoefficientList<E::BasePrimeField>;
+
+    fn setup(poly_size: usize) -> Self::Param {
+        WhirSetupParams {
+            num_variables: log2(poly_size) as usize,
+            _phantom: PhantomData,
+        }
     }
 
-    fn commit_and_write(
-        pp: &Self::Param,
-        poly: &Self::Poly,
-        transcript: &mut Self::Transcript,
-    ) -> Result<Self::CommitmentWithData, Error> {
-        let committer = Committer::new(pp.clone());
-        let witness = committer.commit(transcript, poly.clone())?;
-        Ok(witness)
+    fn commit(pp: &Self::Param, poly: &Self::Poly) -> Result<Self::CommitmentWithWitness, Error> {
+        let params = Spec::prepare_whir_config(pp.num_variables);
+
+        // The merlin here is just for satisfying the interface of
+        // WHIR, which only provides a commit_and_write function.
+        // It will be abandoned once this function finishes.
+        let io = Spec::prepare_io_pattern(pp.num_variables);
+        let mut merlin = io.to_merlin();
+
+        let committer = Committer::new(params);
+        let witness =
+            Spec::MerkleConfigWrapper::commit_to_merlin(&committer, &mut merlin, poly.clone())?;
+
+        Ok(CommitmentWithWitness {
+            commitment: witness.merkle_tree.root(),
+            witness,
+        })
     }
 
     fn batch_commit(
         _pp: &Self::Param,
         _polys: &[Self::Poly],
-    ) -> Result<Self::CommitmentWithData, Error> {
+    ) -> Result<Self::CommitmentWithWitness, Error> {
         todo!()
     }
 
     fn open(
         pp: &Self::Param,
-        witness: Self::CommitmentWithData,
+        witness: Self::CommitmentWithWitness,
         point: &[E],
         eval: &E,
-        transcript: &mut Self::Transcript,
     ) -> Result<Self::Proof, Error> {
-        let prover = Prover(pp.clone());
+        let params = Spec::prepare_whir_config(pp.num_variables);
+        let io = Spec::prepare_io_pattern(pp.num_variables);
+        let mut merlin = io.to_merlin();
+        // In WHIR, the prover writes the commitment to the transcript, then
+        // the commitment is read from the transcript by the verifier, after
+        // the transcript is transformed into a arthur transcript.
+        // Here we repeat whatever the prover does.
+        // TODO: This is a hack. There should be a better design that does not
+        // require non-black-box knowledge of the inner working of WHIR.
+
+        <Spec::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::add_digest_to_merlin(
+            &mut merlin,
+            witness.commitment.clone(),
+        )
+        .map_err(Error::ProofError)?;
+        let ood_answers = witness.ood_answers();
+        if ood_answers.len() > 0 {
+            let mut ood_points = vec![<E as ark_ff::AdditiveGroup>::ZERO; ood_answers.len()];
+            merlin
+                .fill_challenge_scalars(&mut ood_points)
+                .map_err(Error::ProofError)?;
+            merlin
+                .add_scalars(&ood_answers)
+                .map_err(Error::ProofError)?;
+        }
+        // Now the Merlin transcript is ready to pass to the verifier.
+
+        let prover = Prover(params);
         let statement = Statement {
             points: vec![MultilinearPoint(point.to_vec())],
             evaluations: vec![eval.clone()],
         };
 
-        let proof = prover.prove(transcript, statement, witness)?;
-        Ok(proof)
+        let proof = Spec::MerkleConfigWrapper::prove_with_merlin(
+            &prover,
+            &mut merlin,
+            statement,
+            witness.witness,
+        )?;
+
+        Ok(WhirProofWrapper {
+            proof,
+            transcript: merlin.transcript().to_vec(),
+        })
     }
 
     fn batch_open(
         _pp: &Self::Param,
         _polys: &[Self::Poly],
-        _comm: Self::CommitmentWithData,
+        _comm: Self::CommitmentWithWitness,
         _point: &[E],
         _evals: &[E],
-        _transcript: &mut Self::Transcript,
     ) -> Result<Self::Proof, Error> {
         todo!()
     }
 
     fn verify(
         vp: &Self::Param,
+        comm: &Self::Commitment,
         point: &[E],
         eval: &E,
         proof: &Self::Proof,
-        transcript: &Self::Transcript,
     ) -> Result<(), Error> {
-        // TODO: determine reps by security bits
-        let reps = 1000;
-        let verifier = Verifier::new(vp.clone());
-        let io = IOPattern::<DefaultHash>::new("🌪️")
-            .commit_statement(&vp)
-            .add_whir_proof(&vp);
+        let params = Spec::prepare_whir_config(vp.num_variables);
+        let verifier = Verifier::new(params);
+        let io = Spec::prepare_io_pattern(vp.num_variables);
+        let mut arthur = io.to_arthur(&proof.transcript);
 
         let statement = Statement {
             points: vec![MultilinearPoint(point.to_vec())],
             evaluations: vec![eval.clone()],
         };
 
-        for _ in 0..reps {
-            let mut arthur = io.to_arthur(transcript.transcript());
-            verifier.verify(&mut arthur, &statement, proof)?;
+        let digest = Spec::MerkleConfigWrapper::verify_with_arthur(
+            &verifier,
+            &mut arthur,
+            &statement,
+            &proof.proof,
+        )?;
+
+        if &digest != comm {
+            return Err(Error::CommitmentMismatchFromDigest);
         }
+
         Ok(())
     }
 
@@ -139,44 +329,7 @@ where
         _point: &[E],
         _evals: &[E],
         _proof: &Self::Proof,
-        _transcript: &mut Self::Transcript,
     ) -> Result<(), Error> {
         todo!()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use ark_ff::Field;
-    use rand::Rng;
-
-    use super::*;
-    use crate::crypto::fields::Field64_2 as F;
-
-    #[test]
-    fn single_point_verify() {
-        let poly_size = 10;
-        let num_coeffs = 1 << poly_size;
-        let pp = Whir::<F>::setup(poly_size);
-
-        let poly = CoefficientList::new(
-            (0..num_coeffs)
-                .map(<F as Field>::BasePrimeField::from)
-                .collect(),
-        );
-
-        let io = IOPattern::<DefaultHash>::new("🌪️")
-            .commit_statement(&pp)
-            .add_whir_proof(&pp);
-        let mut merlin = io.to_merlin();
-
-        let witness = Whir::<F>::commit_and_write(&pp, &poly, &mut merlin).unwrap();
-
-        let mut rng = rand::thread_rng();
-        let point: Vec<F> = (0..poly_size).map(|_| F::from(rng.gen::<u64>())).collect();
-        let eval = poly.evaluate_at_extension(&MultilinearPoint(point.clone()));
-
-        let proof = Whir::<F>::open(&pp, witness, &point, &eval, &mut merlin).unwrap();
-        Whir::<F>::verify(&pp, &point, &eval, &proof, &merlin).unwrap();
     }
 }

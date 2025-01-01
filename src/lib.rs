@@ -1,3 +1,4 @@
+#![feature(trait_alias)]
 #[cfg(feature = "ceno")]
 pub mod ceno_binding; // Connect whir with ceno
 pub mod cmdline_utils;

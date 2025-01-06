@@ -38,7 +38,7 @@ where
 impl<F, MerkleConfig, PowStrategy> Committer<F, MerkleConfig, PowStrategy>
 where
     F: FftField,
-    MerkleConfig: Config<Leaf = [F]>,
+    MerkleConfig: Config<Leaf = [F]>
 {
     pub fn new(config: WhirConfig<F, MerkleConfig, PowStrategy>) -> Self {
         Self(config)

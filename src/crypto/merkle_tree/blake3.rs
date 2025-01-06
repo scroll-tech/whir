@@ -10,9 +10,7 @@ use ark_crypto_primitives::{
 };
 use ark_ff::Field;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use nimue::{
-    Arthur, ByteIOPattern, ByteReader, ByteWriter, IOPattern, Merlin, ProofError, ProofResult,
-};
+use nimue::{Arthur, ByteIOPattern, ByteReader, ByteWriter, IOPattern, Merlin, ProofError, ProofResult};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 
@@ -141,7 +139,7 @@ impl<F: Field> DigestIOPattern<MerkleTreeParams<F>> for IOPattern {
     }
 }
 
-impl<F: Field> DigestWriter<MerkleTreeParams<F>> for Merlin {
+impl <F: Field> DigestWriter<MerkleTreeParams<F>> for Merlin {
     fn add_digest(&mut self, digest: Blake3Digest) -> ProofResult<()> {
         self.add_bytes(&digest.0).map_err(ProofError::InvalidIO)
     }

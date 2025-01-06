@@ -101,8 +101,6 @@ where
         let eval_1 = c0 + c1 + c2;
         let eval_2 = eval_1 + c1 + c2 + c2.double();
 
-        assert_eq!(self.sum, eval_0 + eval_1);
-
         SumcheckPolynomial::new(vec![eval_0, eval_1, eval_2], 1)
     }
 

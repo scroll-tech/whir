@@ -38,6 +38,14 @@ pub trait WhirMerkleConfigWrapper<F: FftField> {
         witness: Witness<F, Self::MerkleConfig>,
     ) -> ProofResult<WhirProof<Self::MerkleConfig, F>>;
 
+    fn prove_with_merlin_simple_batch(
+        prover: &Prover<F, Self::MerkleConfig, Self::PowStrategy>,
+        merlin: &mut Merlin,
+        point: &[F],
+        evals: &[F],
+        witness: Witnesses<F, Self::MerkleConfig>,
+    ) -> ProofResult<WhirProof<Self::MerkleConfig, F>>;
+
     fn verify_with_arthur(
         verifier: &Verifier<F, Self::MerkleConfig, Self::PowStrategy>,
         arthur: &mut Arthur,
@@ -90,6 +98,16 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for Blake3ConfigWrapper<F> {
         witness: Witness<F, Self::MerkleConfig>,
     ) -> ProofResult<WhirProof<Self::MerkleConfig, F>> {
         prover.prove(merlin, statement, witness)
+    }
+
+    fn prove_with_merlin_simple_batch(
+        prover: &Prover<F, Self::MerkleConfig, Self::PowStrategy>,
+        merlin: &mut Merlin,
+        point: &[F],
+        evals: &[F],
+        witness: Witnesses<F, Self::MerkleConfig>,
+    ) -> ProofResult<WhirProof<Self::MerkleConfig, F>> {
+        prover.simple_batch_prove(merlin, point, evals, witness)
     }
 
     fn verify_with_arthur(
@@ -149,6 +167,16 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for KeccakConfigWrapper<F> {
         witness: Witness<F, Self::MerkleConfig>,
     ) -> ProofResult<WhirProof<Self::MerkleConfig, F>> {
         prover.prove(merlin, statement, witness)
+    }
+
+    fn prove_with_merlin_simple_batch(
+        prover: &Prover<F, Self::MerkleConfig, Self::PowStrategy>,
+        merlin: &mut Merlin,
+        point: &[F],
+        evals: &[F],
+        witness: Witnesses<F, Self::MerkleConfig>,
+    ) -> ProofResult<WhirProof<Self::MerkleConfig, F>> {
+        prover.simple_batch_prove(merlin, point, evals, witness)
     }
 
     fn verify_with_arthur(

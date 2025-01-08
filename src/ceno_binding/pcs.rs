@@ -308,12 +308,52 @@ where
     }
 
     fn simple_batch_open(
-        _pp: &Self::Param,
-        _comm: Self::CommitmentWithWitness,
-        _point: &[E],
-        _evals: &[E],
+        pp: &Self::Param,
+        witness: Self::CommitmentWithWitness,
+        point: &[E],
+        evals: &[E],
     ) -> Result<Self::Proof, Error> {
-        todo!()
+        let params = Spec::prepare_whir_config(pp.num_variables);
+        let io = Spec::prepare_io_pattern(pp.num_variables);
+        let mut merlin = io.to_merlin();
+        // In WHIR, the prover writes the commitment to the transcript, then
+        // the commitment is read from the transcript by the verifier, after
+        // the transcript is transformed into a arthur transcript.
+        // Here we repeat whatever the prover does.
+        // TODO: This is a hack. There should be a better design that does not
+        // require non-black-box knowledge of the inner working of WHIR.
+
+        <Spec::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::add_digest_to_merlin(
+            &mut merlin,
+            witness.commitment.clone(),
+        )
+        .map_err(Error::ProofError)?;
+        let ood_answers = witness.ood_answers();
+        if ood_answers.len() > 0 {
+            let mut ood_points = vec![<E as ark_ff::AdditiveGroup>::ZERO; ood_answers.len()];
+            merlin
+                .fill_challenge_scalars(&mut ood_points)
+                .map_err(Error::ProofError)?;
+            merlin
+                .add_scalars(&ood_answers)
+                .map_err(Error::ProofError)?;
+        }
+        // Now the Merlin transcript is ready to pass to the verifier.
+
+        let prover = Prover(params);
+
+        let proof = Spec::MerkleConfigWrapper::prove_with_merlin_simple_batch(
+            &prover,
+            &mut merlin,
+            point,
+            evals,
+            witness.witness,
+        )?;
+
+        Ok(WhirProofWrapper {
+            proof,
+            transcript: merlin.transcript().to_vec(),
+        })
     }
 
     fn verify(

@@ -17,6 +17,8 @@ pub enum Error {
     ProofError(#[from] nimue::ProofError),
     #[error("CommitmentMismatchFromDigest")]
     CommitmentMismatchFromDigest,
+    #[error("InvalidPcsParams")]
+    InvalidPcsParam,
 }
 
 /// The trait for a non-interactive polynomial commitment scheme.

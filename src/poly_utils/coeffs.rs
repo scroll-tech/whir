@@ -30,6 +30,22 @@ impl<F> CoefficientList<F>
 where
     F: Field,
 {
+    fn coeff_at(&self, index: usize) -> F {
+        self.coeffs[index]
+    }
+
+    /// Linearly combine the given polynomials using the given coefficients
+    pub fn combine(polys: Vec<Self>, coeffs: &[F]) -> Self {
+        let mut combined_coeffs = vec![F::ZERO; polys[0].coeffs.len()];
+        polys.iter().enumerate().for_each(|(poly_index, poly)| {
+            for i in 0..combined_coeffs.len() {
+                combined_coeffs[i] += poly.coeff_at(i) * coeffs[poly_index];
+            }
+        });
+
+        Self::new(combined_coeffs)
+    }
+
     /// Evaluate the given polynomial at `point` from {0,1}^n
     pub fn evaluate_hypercube(&self, point: BinaryHypercubePoint) -> F {
         assert_eq!(self.coeffs.len(), 1 << self.num_variables);

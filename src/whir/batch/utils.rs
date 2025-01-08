@@ -1,5 +1,7 @@
-use crate::ntt::transpose;
+use crate::{ntt::transpose, utils::expand_randomness, whir::fs_utils::DigestWriter};
+use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::Field;
+use nimue::{plugins::ark::{FieldChallenges, FieldWriter}, ByteWriter, ProofResult};
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
@@ -35,4 +37,19 @@ pub fn horizontal_stacking<F: Field>(
     let stacked_evals = evals.par_chunks_exact_mut(fold_size * num_polys);
     stacked_evals.for_each(|eval| stack_evaluations_mut(eval, folding_factor));
     evals
+}
+
+// generate a random vector for batching open
+pub fn generate_random_vector_batch_open<F, Merlin, MerkleConfig>(
+    merlin: &mut Merlin,
+    size: usize,
+) -> ProofResult<Vec<F>>
+where
+    F: Field,
+    MerkleConfig: Config,
+    Merlin: FieldChallenges<F> + FieldWriter<F> + ByteWriter + DigestWriter<MerkleConfig>,
+{
+    let [gamma] = merlin.challenge_scalars()?;
+    let res = expand_randomness(gamma, size);
+    Ok(res)
 }

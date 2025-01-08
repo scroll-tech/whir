@@ -6,6 +6,7 @@ use nimue_pow::PowStrategy;
 use crate::crypto::merkle_tree::blake3::MerkleTreeParams as Blake3Params;
 use crate::crypto::merkle_tree::keccak::MerkleTreeParams as KeccakParams;
 use crate::poly_utils::coeffs::CoefficientList;
+use crate::whir::batch::Witnesses;
 use crate::whir::committer::{Committer, Witness};
 use crate::whir::fs_utils::DigestWriter;
 use crate::whir::iopattern::WhirIOPattern;
@@ -23,6 +24,12 @@ pub trait WhirMerkleConfigWrapper<F: FftField> {
         merlin: &mut Merlin<DefaultHash>,
         poly: CoefficientList<F::BasePrimeField>,
     ) -> ProofResult<Witness<F, Self::MerkleConfig>>;
+
+    fn commit_to_merlin_batch(
+        committer: &Committer<F, Self::MerkleConfig, Self::PowStrategy>,
+        merlin: &mut Merlin<DefaultHash>,
+        polys: &[CoefficientList<F::BasePrimeField>],
+    ) -> ProofResult<Witnesses<F, Self::MerkleConfig>>;
 
     fn prove_with_merlin(
         prover: &Prover<F, Self::MerkleConfig, Self::PowStrategy>,
@@ -66,6 +73,14 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for Blake3ConfigWrapper<F> {
         poly: CoefficientList<F::BasePrimeField>,
     ) -> ProofResult<Witness<F, Self::MerkleConfig>> {
         committer.commit(merlin, poly)
+    }
+
+    fn commit_to_merlin_batch(
+        committer: &Committer<F, Self::MerkleConfig, Self::PowStrategy>,
+        merlin: &mut Merlin<DefaultHash>,
+        polys: &[CoefficientList<F::BasePrimeField>],
+    ) -> ProofResult<Witnesses<F, Self::MerkleConfig>> {
+        committer.batch_commit(merlin, polys)
     }
 
     fn prove_with_merlin(
@@ -117,6 +132,14 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for KeccakConfigWrapper<F> {
         poly: CoefficientList<F::BasePrimeField>,
     ) -> ProofResult<Witness<F, Self::MerkleConfig>> {
         committer.commit(merlin, poly)
+    }
+
+    fn commit_to_merlin_batch(
+        committer: &Committer<F, Self::MerkleConfig, Self::PowStrategy>,
+        merlin: &mut Merlin<DefaultHash>,
+        polys: &[CoefficientList<F::BasePrimeField>],
+    ) -> ProofResult<Witnesses<F, Self::MerkleConfig>> {
+        committer.batch_commit(merlin, polys)
     }
 
     fn prove_with_merlin(

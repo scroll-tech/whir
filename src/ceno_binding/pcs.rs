@@ -225,10 +225,34 @@ where
     }
 
     fn batch_commit(
-        _pp: &Self::Param,
-        _polys: &[Self::Poly],
+        pp: &Self::Param,
+        polys: &[Self::Poly],
     ) -> Result<Self::CommitmentWithWitness, Error> {
-        todo!()
+        if polys.is_empty() {
+            return Err(Error::InvalidPcsParam);
+        }
+
+        for i in 1..polys.len() {
+            if polys[i].num_variables() != polys[0].num_variables() {
+                return Err(Error::InvalidPcsParam);
+            }
+        }
+
+        let params = Spec::prepare_whir_config(pp.num_variables);
+
+        // The merlin here is just for satisfying the interface of
+        // WHIR, which only provides a commit_and_write function.
+        // It will be abandoned once this function finishes.
+        let io = Spec::prepare_io_pattern(pp.num_variables);
+        let mut merlin = io.to_merlin();
+
+        let committer = Committer::new(params);
+        let witness =
+            Spec::MerkleConfigWrapper::commit_to_merlin_batch(&committer, &mut merlin, polys)?;
+        Ok(CommitmentWithWitness {
+            commitment: witness.merkle_tree.root(),
+            witness,
+        })
     }
 
     fn open(

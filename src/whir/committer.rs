@@ -30,7 +30,7 @@ where
     pub(crate) ood_answers: Vec<F>,
 }
 
-pub struct Committer<F, MerkleConfig, PowStrategy>(WhirConfig<F, MerkleConfig, PowStrategy>)
+pub struct Committer<F, MerkleConfig, PowStrategy>(pub(crate) WhirConfig<F, MerkleConfig, PowStrategy>)
 where
     F: FftField,
     MerkleConfig: Config;

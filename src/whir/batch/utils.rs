@@ -1,7 +1,14 @@
-use crate::{ntt::transpose, utils::expand_randomness, whir::fs_utils::DigestWriter};
+use crate::{
+    ntt::transpose,
+    utils::expand_randomness,
+    whir::fs_utils::{DigestReader, DigestWriter},
+};
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::Field;
-use nimue::{plugins::ark::{FieldChallenges, FieldWriter}, ByteWriter, ProofResult};
+use nimue::{
+    plugins::ark::{FieldChallenges, FieldReader, FieldWriter},
+    ByteReader, ByteWriter, ProofResult,
+};
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
@@ -50,6 +57,21 @@ where
     Merlin: FieldChallenges<F> + FieldWriter<F> + ByteWriter + DigestWriter<MerkleConfig>,
 {
     let [gamma] = merlin.challenge_scalars()?;
+    let res = expand_randomness(gamma, size);
+    Ok(res)
+}
+
+// generate a random vector for batching verify
+pub fn generate_random_vector_batch_verify<F, Arthur, MerkleConfig>(
+    arthur: &mut Arthur,
+    size: usize,
+) -> ProofResult<Vec<F>>
+where
+    F: Field,
+    MerkleConfig: Config,
+    Arthur: FieldChallenges<F> + FieldReader<F> + ByteReader + DigestReader<MerkleConfig>,
+{
+    let [gamma] = arthur.challenge_scalars()?;
     let res = expand_randomness(gamma, size);
     Ok(res)
 }

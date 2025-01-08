@@ -148,13 +148,14 @@ where
             batching_randomness: random_coeff,
         };
 
-        self.round_batch(merlin, round_state)
+        self.round_batch(merlin, round_state, num_polys)
     }
 
     fn round_batch<Merlin>(
         &self,
         merlin: &mut Merlin,
         round_state: RoundStateBatch<F, MerkleConfig>,
+        num_polys: usize,
     ) -> ProofResult<WhirProof<MerkleConfig, F>>
     where
         Merlin: FieldChallenges<F>
@@ -292,11 +293,24 @@ where
             .prev_merkle
             .generate_multi_proof(stir_challenges_indexes.clone())
             .unwrap();
-        let fold_size = 1 << self.0.folding_factor;
-        let answers: Vec<_> = stir_challenges_indexes
+        let fold_size = (1 << self.0.folding_factor) * num_polys;
+        let answers = stir_challenges_indexes
             .iter()
             .map(|i| round_state.prev_merkle_answers[i * fold_size..(i + 1) * fold_size].to_vec())
-            .collect();
+            .collect::<Vec<_>>();
+        let batched_answers = answers
+            .iter()
+            .map(|answer| {
+                let chunk_size = 1 << self.0.folding_factor;
+                let mut res = vec![F::ZERO; chunk_size];
+                for i in 0..chunk_size {
+                    for j in 0..num_polys {
+                        res[i] += answer[i + j * chunk_size] * batching_randomness[j];
+                    }
+                }
+                res
+            })
+            .collect::<Vec<_>>();
         // Evaluate answers in the folding randomness.
         let mut stir_evaluations = ood_answers.clone();
         match self.0.fold_optimisation {
@@ -308,14 +322,14 @@ where
                 let coset_domain_size = 1 << self.0.folding_factor;
                 let coset_generator_inv =
                     domain_gen_inv.pow([(domain_size / coset_domain_size) as u64]);
-                stir_evaluations.extend(stir_challenges_indexes.iter().zip(&answers).map(
-                    |(index, answers)| {
+                stir_evaluations.extend(stir_challenges_indexes.iter().zip(&batched_answers).map(
+                    |(index, batched_answers)| {
                         // The coset is w^index * <w_coset_generator>
                         //let _coset_offset = domain_gen.pow(&[*index as u64]);
                         let coset_offset_inv = domain_gen_inv.pow([*index as u64]);
 
                         compute_fold(
-                            answers,
+                            batched_answers,
                             &round_state.folding_randomness.0,
                             coset_offset_inv,
                             coset_generator_inv,
@@ -325,9 +339,12 @@ where
                     },
                 ))
             }
-            FoldType::ProverHelps => stir_evaluations.extend(answers.iter().map(|answers| {
-                CoefficientList::new(answers.to_vec()).evaluate(&round_state.folding_randomness)
-            })),
+            FoldType::ProverHelps => {
+                stir_evaluations.extend(batched_answers.iter().map(|batched_answers| {
+                    CoefficientList::new(batched_answers.to_vec())
+                        .evaluate(&round_state.folding_randomness)
+                }))
+            }
         }
         round_state.merkle_proofs.push((merkle_proof, answers));
 

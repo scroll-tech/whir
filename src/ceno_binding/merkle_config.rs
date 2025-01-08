@@ -53,6 +53,14 @@ pub trait WhirMerkleConfigWrapper<F: FftField> {
         whir_proof: &WhirProof<Self::MerkleConfig, F>,
     ) -> ProofResult<<Self::MerkleConfig as Config>::InnerDigest>;
 
+    fn verify_with_arthur_simple_batch(
+        verifier: &Verifier<F, Self::MerkleConfig, Self::PowStrategy>,
+        arthur: &mut Arthur,
+        point: &[F],
+        evals: &[F],
+        whir_proof: &WhirProof<Self::MerkleConfig, F>,
+    ) -> ProofResult<<Self::MerkleConfig as Config>::InnerDigest>;
+
     fn commit_statement_to_io_pattern(
         iopattern: IOPattern,
         params: &WhirConfig<F, Self::MerkleConfig, Self::PowStrategy>,
@@ -117,6 +125,16 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for Blake3ConfigWrapper<F> {
         whir_proof: &WhirProof<Self::MerkleConfig, F>,
     ) -> ProofResult<<Self::MerkleConfig as Config>::InnerDigest> {
         verifier.verify(arthur, statement, whir_proof)
+    }
+
+    fn verify_with_arthur_simple_batch(
+        verifier: &Verifier<F, Self::MerkleConfig, Self::PowStrategy>,
+        arthur: &mut Arthur,
+        point: &[F],
+        evals: &[F],
+        whir_proof: &WhirProof<Self::MerkleConfig, F>,
+    ) -> ProofResult<<Self::MerkleConfig as Config>::InnerDigest> {
+        verifier.simple_batch_verify(arthur, point, evals, whir_proof)
     }
 
     fn commit_statement_to_io_pattern(
@@ -186,6 +204,16 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for KeccakConfigWrapper<F> {
         whir_proof: &WhirProof<Self::MerkleConfig, F>,
     ) -> ProofResult<<Self::MerkleConfig as Config>::InnerDigest> {
         verifier.verify(arthur, statement, whir_proof)
+    }
+
+    fn verify_with_arthur_simple_batch(
+        verifier: &Verifier<F, Self::MerkleConfig, Self::PowStrategy>,
+        arthur: &mut Arthur,
+        point: &[F],
+        evals: &[F],
+        whir_proof: &WhirProof<Self::MerkleConfig, F>,
+    ) -> ProofResult<<Self::MerkleConfig as Config>::InnerDigest> {
+        verifier.simple_batch_verify(arthur, point, evals, whir_proof)
     }
 
     fn commit_statement_to_io_pattern(

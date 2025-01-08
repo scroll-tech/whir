@@ -388,11 +388,29 @@ where
     }
 
     fn simple_batch_verify(
-        _vp: &Self::Param,
-        _point: &[E],
-        _evals: &[E],
-        _proof: &Self::Proof,
+        vp: &Self::Param,
+        comm: &Self::Commitment,
+        point: &[E],
+        evals: &[E],
+        proof: &Self::Proof,
     ) -> Result<(), Error> {
-        todo!()
+        let params = Spec::prepare_whir_config(vp.num_variables);
+        let verifier = Verifier::new(params);
+        let io = Spec::prepare_io_pattern(vp.num_variables);
+        let mut arthur = io.to_arthur(&proof.transcript);
+
+        let digest = Spec::MerkleConfigWrapper::verify_with_arthur_simple_batch(
+            &verifier,
+            &mut arthur,
+            point,
+            evals,
+            &proof.proof,
+        )?;
+
+        if &digest != comm {
+            return Err(Error::CommitmentMismatchFromDigest);
+        }
+
+        Ok(())
     }
 }

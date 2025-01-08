@@ -70,6 +70,7 @@ pub trait PolynomialCommitmentScheme<E: FftField>: Clone {
 
     fn simple_batch_verify(
         vp: &Self::Param,
+        comm: &Self::Commitment,
         point: &[E],
         evals: &[E],
         proof: &Self::Proof,

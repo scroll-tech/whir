@@ -33,7 +33,7 @@ where
         point: &[F],
         evals: &[F],
         whir_proof: &WhirProof<MerkleConfig, F>,
-    ) -> ProofResult<()>
+    ) -> ProofResult<MerkleConfig::InnerDigest>
     where
         Arthur: FieldChallenges<F>
             + FieldReader<F>
@@ -218,7 +218,7 @@ where
             return Err(ProofError::InvalidProof);
         }
 
-        Ok(())
+        Ok(parsed_commitment.root)
     }
 
     fn parse_commitment_batch<Arthur>(

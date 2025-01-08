@@ -7,6 +7,7 @@ use crate::{
 use ark_crypto_primitives::merkle_tree::{Config, MerkleTree};
 use ark_ff::FftField;
 use ark_poly::EvaluationDomain;
+use derive_more::Debug;
 use nimue::{
     plugins::ark::{FieldChallenges, FieldWriter},
     ByteWriter, ProofResult,
@@ -16,11 +17,13 @@ use crate::whir::fs_utils::DigestWriter;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
+#[derive(Debug, Clone)]
 pub struct Witnesses<F, MerkleConfig>
 where
     MerkleConfig: Config,
 {
     pub(crate) polys: Vec<CoefficientList<F>>,
+    #[debug(skip)]
     pub(crate) merkle_tree: MerkleTree<MerkleConfig>,
     pub(crate) merkle_leaves: Vec<F>,
     pub(crate) ood_points: Vec<F>,

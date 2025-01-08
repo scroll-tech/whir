@@ -6,11 +6,8 @@ use crate::parameters::{
 };
 use crate::poly_utils::{coeffs::CoefficientList, MultilinearPoint};
 use crate::whir::{
-    committer::{Committer, Witness},
-    parameters::WhirConfig,
-    prover::Prover,
-    verifier::Verifier,
-    Statement, WhirProof,
+    batch::Witnesses, committer::Committer, parameters::WhirConfig, prover::Prover,
+    verifier::Verifier, Statement, WhirProof,
 };
 
 use ark_crypto_primitives::merkle_tree::Config;
@@ -166,7 +163,7 @@ where
     MerkleConfig: Config,
 {
     pub commitment: MerkleConfig::InnerDigest,
-    pub witness: Witness<F, MerkleConfig>,
+    pub witness: Witnesses<F, MerkleConfig>,
 }
 
 impl<F: FftField, MerkleConfig> CommitmentWithWitness<F, MerkleConfig>
@@ -215,8 +212,11 @@ where
         let mut merlin = io.to_merlin();
 
         let committer = Committer::new(params);
-        let witness =
-            Spec::MerkleConfigWrapper::commit_to_merlin(&committer, &mut merlin, poly.clone())?;
+        let witness = Witnesses::from(Spec::MerkleConfigWrapper::commit_to_merlin(
+            &committer,
+            &mut merlin,
+            poly.clone(),
+        )?);
 
         Ok(CommitmentWithWitness {
             commitment: witness.merkle_tree.root(),
@@ -274,7 +274,7 @@ where
             &prover,
             &mut merlin,
             statement,
-            witness.witness,
+            witness.witness.into(),
         )?;
 
         Ok(WhirProofWrapper {

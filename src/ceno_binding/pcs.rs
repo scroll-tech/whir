@@ -283,9 +283,8 @@ where
         })
     }
 
-    fn batch_open(
+    fn simple_batch_open(
         _pp: &Self::Param,
-        _polys: &[Self::Poly],
         _comm: Self::CommitmentWithWitness,
         _point: &[E],
         _evals: &[E],
@@ -324,7 +323,7 @@ where
         Ok(())
     }
 
-    fn batch_verify(
+    fn simple_batch_verify(
         _vp: &Self::Param,
         _point: &[E],
         _evals: &[E],

@@ -52,6 +52,21 @@ pub trait WhirSpec<E: FftField>: Default + std::fmt::Debug + Clone {
 
         io
     }
+
+    fn prepare_batch_io_pattern(num_variables: usize, batch_size: usize) -> IOPattern {
+        let params = Self::prepare_whir_config(num_variables);
+
+        let io = IOPattern::<DefaultHash>::new("🌪️");
+        let io = <Self::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::commit_batch_statement_to_io_pattern(
+            io, &params, batch_size
+        );
+        let io =
+            <Self::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::add_whir_batch_proof_to_io_pattern(
+                io, &params, batch_size
+            );
+
+        io
+    }
 }
 
 type MerkleConfigOf<Spec, E> =
@@ -243,7 +258,7 @@ where
         // The merlin here is just for satisfying the interface of
         // WHIR, which only provides a commit_and_write function.
         // It will be abandoned once this function finishes.
-        let io = Spec::prepare_io_pattern(pp.num_variables);
+        let io = Spec::prepare_batch_io_pattern(pp.num_variables, polys.len());
         let mut merlin = io.to_merlin();
 
         let committer = Committer::new(params);
@@ -314,7 +329,7 @@ where
         evals: &[E],
     ) -> Result<Self::Proof, Error> {
         let params = Spec::prepare_whir_config(pp.num_variables);
-        let io = Spec::prepare_io_pattern(pp.num_variables);
+        let io = Spec::prepare_batch_io_pattern(pp.num_variables, evals.len());
         let mut merlin = io.to_merlin();
         // In WHIR, the prover writes the commitment to the transcript, then
         // the commitment is read from the transcript by the verifier, after
@@ -396,7 +411,7 @@ where
     ) -> Result<(), Error> {
         let params = Spec::prepare_whir_config(vp.num_variables);
         let verifier = Verifier::new(params);
-        let io = Spec::prepare_io_pattern(vp.num_variables);
+        let io = Spec::prepare_batch_io_pattern(vp.num_variables, evals.len());
         let mut arthur = io.to_arthur(&proof.transcript);
 
         let digest = Spec::MerkleConfigWrapper::verify_with_arthur_simple_batch(

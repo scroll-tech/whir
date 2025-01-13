@@ -6,7 +6,7 @@ use nimue_pow::PowStrategy;
 use crate::crypto::merkle_tree::blake3::MerkleTreeParams as Blake3Params;
 use crate::crypto::merkle_tree::keccak::MerkleTreeParams as KeccakParams;
 use crate::poly_utils::coeffs::CoefficientList;
-use crate::whir::batch::Witnesses;
+use crate::whir::batch::{WhirBatchIOPattern, Witnesses};
 use crate::whir::committer::{Committer, Witness};
 use crate::whir::fs_utils::DigestWriter;
 use crate::whir::iopattern::WhirIOPattern;
@@ -69,6 +69,18 @@ pub trait WhirMerkleConfigWrapper<F: FftField> {
     fn add_whir_proof_to_io_pattern(
         iopattern: IOPattern,
         params: &WhirConfig<F, Self::MerkleConfig, Self::PowStrategy>,
+    ) -> IOPattern;
+
+    fn commit_batch_statement_to_io_pattern(
+        iopattern: IOPattern,
+        params: &WhirConfig<F, Self::MerkleConfig, Self::PowStrategy>,
+        batch_size: usize,
+    ) -> IOPattern;
+
+    fn add_whir_batch_proof_to_io_pattern(
+        iopattern: IOPattern,
+        params: &WhirConfig<F, Self::MerkleConfig, Self::PowStrategy>,
+        batch_size: usize,
     ) -> IOPattern;
 
     fn add_digest_to_merlin(
@@ -151,6 +163,22 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for Blake3ConfigWrapper<F> {
         iopattern.add_whir_proof(params)
     }
 
+    fn commit_batch_statement_to_io_pattern(
+        iopattern: IOPattern,
+        params: &WhirConfig<F, Self::MerkleConfig, Self::PowStrategy>,
+        batch_size: usize,
+    ) -> IOPattern {
+        iopattern.commit_batch_statement(params, batch_size)
+    }
+
+    fn add_whir_batch_proof_to_io_pattern(
+        iopattern: IOPattern,
+        params: &WhirConfig<F, Self::MerkleConfig, Self::PowStrategy>,
+        batch_size: usize,
+    ) -> IOPattern {
+        iopattern.add_whir_batch_proof(params, batch_size)
+    }
+
     fn add_digest_to_merlin(
         merlin: &mut Merlin,
         digest: <Self::MerkleConfig as Config>::InnerDigest,
@@ -228,6 +256,22 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for KeccakConfigWrapper<F> {
         params: &WhirConfig<F, Self::MerkleConfig, Self::PowStrategy>,
     ) -> IOPattern {
         iopattern.add_whir_proof(params)
+    }
+
+    fn commit_batch_statement_to_io_pattern(
+        iopattern: IOPattern,
+        params: &WhirConfig<F, Self::MerkleConfig, Self::PowStrategy>,
+        batch_size: usize,
+    ) -> IOPattern {
+        iopattern.commit_batch_statement(params, batch_size)
+    }
+
+    fn add_whir_batch_proof_to_io_pattern(
+        iopattern: IOPattern,
+        params: &WhirConfig<F, Self::MerkleConfig, Self::PowStrategy>,
+        batch_size: usize,
+    ) -> IOPattern {
+        iopattern.add_whir_batch_proof(params, batch_size)
     }
 
     fn add_digest_to_merlin(

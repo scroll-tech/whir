@@ -56,6 +56,9 @@ where
     MerkleConfig: Config,
     Merlin: FieldChallenges<F> + FieldWriter<F> + ByteWriter + DigestWriter<MerkleConfig>,
 {
+    if size == 1 {
+        return Ok(vec![F::one()]);
+    }
     let [gamma] = merlin.challenge_scalars()?;
     let res = expand_randomness(gamma, size);
     Ok(res)
@@ -71,6 +74,9 @@ where
     MerkleConfig: Config,
     Arthur: FieldChallenges<F> + FieldReader<F> + ByteReader + DigestReader<MerkleConfig>,
 {
+    if size == 1 {
+        return Ok(vec![F::one()]);
+    }
     let [gamma] = arthur.challenge_scalars()?;
     let res = expand_randomness(gamma, size);
     Ok(res)

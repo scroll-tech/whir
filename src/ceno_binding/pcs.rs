@@ -90,7 +90,7 @@ impl<E: FftField> WhirSpec<E> for WhirDefaultSpec {
             initial_statement: true,
             security_level: 100,
             pow_bits: default_max_pow(num_variables, 1),
-            folding_factor: 4,
+            folding_factor: 2,
             leaf_hash_params,
             two_to_one_params,
             soundness_type: SoundnessType::ConjectureList,
@@ -345,7 +345,8 @@ where
         .map_err(Error::ProofError)?;
         let ood_answers = witness.ood_answers();
         if ood_answers.len() > 0 {
-            let mut ood_points = vec![<E as ark_ff::AdditiveGroup>::ZERO; ood_answers.len()];
+            let mut ood_points =
+                vec![<E as ark_ff::AdditiveGroup>::ZERO; ood_answers.len() / evals.len()];
             merlin
                 .fill_challenge_scalars(&mut ood_points)
                 .map_err(Error::ProofError)?;

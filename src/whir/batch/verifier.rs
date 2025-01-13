@@ -349,23 +349,28 @@ where
                 return Err(ProofError::InvalidProof);
             }
 
-            let combined_answers: Vec<_> = answers
-                .into_iter()
-                .map(|raw_answer| {
-                    if batched_randomness.len() > 0 {
-                        let chunk_size = 1 << self.params.folding_factor;
-                        let mut res = vec![F::ZERO; chunk_size];
-                        for i in 0..chunk_size {
-                            for j in 0..num_polys {
-                                res[i] += raw_answer[i + j * chunk_size] * batched_randomness[j];
+            let answers: Vec<_> = if r == 0 {
+                answers
+                    .into_iter()
+                    .map(|raw_answer| {
+                        if batched_randomness.len() > 0 {
+                            let chunk_size = 1 << self.params.folding_factor;
+                            let mut res = vec![F::ZERO; chunk_size];
+                            for i in 0..chunk_size {
+                                for j in 0..num_polys {
+                                    res[i] +=
+                                        raw_answer[i + j * chunk_size] * batched_randomness[j];
+                                }
                             }
+                            res
+                        } else {
+                            raw_answer.clone()
                         }
-                        res
-                    } else {
-                        raw_answer.clone()
-                    }
-                })
-                .collect();
+                    })
+                    .collect()
+            } else {
+                answers.to_vec()
+            };
 
             if round_params.pow_bits > 0. {
                 arthur.challenge_pow::<PowStrategy>(round_params.pow_bits)?;
@@ -398,7 +403,7 @@ where
                 ood_answers,
                 stir_challenges_indexes,
                 stir_challenges_points,
-                stir_challenges_answers: combined_answers,
+                stir_challenges_answers: answers,
                 combination_randomness,
                 sumcheck_rounds,
                 domain_gen_inv,

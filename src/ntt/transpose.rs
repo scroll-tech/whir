@@ -13,13 +13,13 @@ use rayon::join;
 /// This algorithm assumes that both rows and cols are powers of two.
 pub fn transpose<F: Sized + Copy + Send>(matrix: &mut [F], rows: usize, cols: usize) {
     debug_assert_eq!(matrix.len() % (rows * cols), 0);
-    debug_assert!(is_power_of_two(rows));
-    debug_assert!(is_power_of_two(cols));
     // eprintln!(
     //     "Transpose {} x {rows} x {cols} matrix.",
     //     matrix.len() / (rows * cols)
     // );
     if rows == cols {
+        debug_assert!(is_power_of_two(rows));
+        debug_assert!(is_power_of_two(cols));
         for matrix in matrix.chunks_exact_mut(rows * cols) {
             let matrix = MatrixMut::from_mut_slice(matrix, rows, cols);
             transpose_square(matrix);
@@ -85,10 +85,7 @@ fn transpose_copy_parallel<F: Sized + Copy + Send>(
 
 /// Sets `dst` to the transpose of `src`. This will panic if the sizes of `src` and `dst` are not compatible.
 /// This is the non-parallel version
-fn transpose_copy_not_parallel<F: Sized + Copy>(
-    src: MatrixMut<'_, F>,
-    mut dst: MatrixMut<'_, F>,
-) {
+fn transpose_copy_not_parallel<F: Sized + Copy>(src: MatrixMut<'_, F>, mut dst: MatrixMut<'_, F>) {
     assert_eq!(src.rows(), dst.cols());
     assert_eq!(src.cols(), dst.rows());
     if src.rows() * src.cols() > workload_size::<F>() {

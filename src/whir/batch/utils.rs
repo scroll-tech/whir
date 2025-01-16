@@ -12,6 +12,15 @@ use nimue::{
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
+pub fn stack_evaluations<F: Field>(mut evals: Vec<F>, folding_factor: usize) -> Vec<F> {
+    assert!(evals.len() % folding_factor == 0);
+    let size_of_new_domain = evals.len() / folding_factor;
+
+    // interpret evals as (folding_factor_exp x size_of_new_domain)-matrix and transpose in-place
+    transpose(&mut evals, folding_factor, size_of_new_domain);
+    evals
+}
+
 /// Takes the vector of evaluations (assume that evals[i] = f(omega^i))
 /// and folds them into a vector of such that folded_evals[i] = [f(omega^(i + k * j)) for j in 0..folding_factor]
 /// This function will mutate the function without return
@@ -35,9 +44,8 @@ pub fn horizontal_stacking<F: Field>(
 ) -> Vec<F> {
     let fold_size = 1 << folding_factor;
     let num_polys: usize = evals.len() / domain_size;
-    let num_polys_log2: usize = num_polys.ilog2() as usize;
 
-    let mut evals = crate::utils::stack_evaluations(evals, num_polys_log2);
+    let mut evals = stack_evaluations(evals, num_polys);
     #[cfg(not(feature = "parallel"))]
     let stacked_evals = evals.chunks_exact_mut(fold_size * num_polys);
     #[cfg(feature = "parallel")]

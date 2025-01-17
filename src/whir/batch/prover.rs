@@ -15,6 +15,7 @@ use crate::{
 use ark_crypto_primitives::merkle_tree::{Config, MerkleTree};
 use ark_ff::FftField;
 use ark_poly::EvaluationDomain;
+use ark_std::{end_timer, start_timer};
 use itertools::zip_eq;
 use nimue::{
     plugins::ark::{FieldChallenges, FieldWriter},
@@ -148,7 +149,11 @@ where
             batching_randomness: random_coeff,
         };
 
-        self.round_batch(merlin, round_state, num_polys)
+        let timer = start_timer!("round_batch");
+        let result = self.round_batch(merlin, round_state, num_polys);
+        end_timer!(timer);
+
+        result
     }
 
     fn round_batch<Merlin>(
@@ -295,11 +300,11 @@ where
             .unwrap();
         let fold_size = (1 << self.0.folding_factor) * num_polys;
         let answers = stir_challenges_indexes
-            .iter()
+            .par_iter()
             .map(|i| round_state.prev_merkle_answers[i * fold_size..(i + 1) * fold_size].to_vec())
             .collect::<Vec<_>>();
         let batched_answers = answers
-            .iter()
+            .par_iter()
             .map(|answer| {
                 let chunk_size = 1 << self.0.folding_factor;
                 let mut res = vec![F::ZERO; chunk_size];

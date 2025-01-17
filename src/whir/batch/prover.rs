@@ -92,19 +92,19 @@ where
 
         let initial_claims: Vec<_> = witness
             .ood_points
-            .into_iter()
+            .into_par_iter()
             .map(|ood_point| {
                 MultilinearPoint::expand_from_univariate(
                     ood_point,
                     self.0.mv_parameters.num_variables,
                 )
             })
-            .chain(std::iter::once(MultilinearPoint(point.to_vec())))
+            .chain(rayon::iter::once(MultilinearPoint(point.to_vec())))
             .collect();
 
         let ood_answers = witness
             .ood_answers
-            .chunks_exact(witness.polys.len())
+            .par_chunks_exact(witness.polys.len())
             .map(|answer| compute_dot_product(answer, &random_coeff))
             .collect::<Vec<_>>();
         let eval = compute_dot_product(evals, &random_coeff);
@@ -201,7 +201,7 @@ where
                 .unwrap();
             let fold_size = 1 << self.0.folding_factor;
             let answers = final_challenge_indexes
-                .into_iter()
+                .into_par_iter()
                 .map(|i| {
                     round_state.prev_merkle_answers[i * fold_size..(i + 1) * fold_size].to_vec()
                 })
@@ -287,10 +287,10 @@ where
             .backing_domain
             .element(1 << self.0.folding_factor);
         let stir_challenges: Vec<_> = ood_points
-            .into_iter()
+            .into_par_iter()
             .chain(
                 stir_challenges_indexes
-                    .iter()
+                    .par_iter()
                     .map(|i| domain_scaled_gen.pow([*i as u64])),
             )
             .map(|univariate| MultilinearPoint::expand_from_univariate(univariate, num_variables))

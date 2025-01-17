@@ -7,6 +7,7 @@ use crate::{
 use ark_crypto_primitives::merkle_tree::{Config, MerkleTree};
 use ark_ff::FftField;
 use ark_poly::EvaluationDomain;
+use ark_std::{end_timer, start_timer};
 use derive_more::Debug;
 use nimue::{
     plugins::ark::{FieldChallenges, FieldWriter},
@@ -58,6 +59,7 @@ impl<F, MerkleConfig, PowStrategy> Committer<F, MerkleConfig, PowStrategy>
 where
     F: FftField,
     MerkleConfig: Config<Leaf = [F]>,
+    PowStrategy: Sync,
 {
     pub fn batch_commit<Merlin>(
         &self,
@@ -67,17 +69,21 @@ where
     where
         Merlin: FieldWriter<F> + FieldChallenges<F> + ByteWriter + DigestWriter<MerkleConfig>,
     {
+        let timer = start_timer!(|| "Batch Commit");
         let base_domain = self.0.starting_domain.base_domain.unwrap();
         let expansion = base_domain.size() / polys[0].num_coeffs();
+        let expand_timer = start_timer!(|| "Batch Expand");
         let evals = polys
-            .iter()
+            .par_iter()
             .map(|poly| expand_from_coeff(poly.coeffs(), expansion))
             .collect::<Vec<Vec<_>>>();
+        end_timer!(expand_timer);
 
         assert_eq!(base_domain.size(), evals[0].len());
 
+        let stack_evaluations_timer = start_timer!(|| "Stack Evaluations");
         let folded_evals = evals
-            .into_iter()
+            .into_par_iter()
             .map(|evals| utils::stack_evaluations(evals, self.0.folding_factor))
             .map(|evals| {
                 restructure_evaluations(
@@ -90,16 +96,20 @@ where
             })
             .flat_map(|evals| {
                 evals
-                    .into_iter()
+                    .into_par_iter()
                     .map(F::from_base_prime_field)
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
+        end_timer!(stack_evaluations_timer);
+
+        let horizontal_stacking_timer = start_timer!(|| "Horizontal Stacking");
         let folded_evals = super::utils::horizontal_stacking(
             folded_evals,
             base_domain.size(),
             self.0.folding_factor,
         );
+        end_timer!(horizontal_stacking_timer);
 
         // Group folds together as a leaf.
         let fold_size = 1 << self.0.folding_factor;
@@ -108,12 +118,14 @@ where
         #[cfg(feature = "parallel")]
         let leafs_iter = folded_evals.par_chunks_exact(fold_size * polys.len());
 
+        let merkle_build_timer = start_timer!(|| "Build Merkle Tree");
         let merkle_tree = MerkleTree::<MerkleConfig>::new(
             &self.0.leaf_hash_params,
             &self.0.two_to_one_params,
             leafs_iter,
         )
         .unwrap();
+        end_timer!(merkle_build_timer);
 
         let root = merkle_tree.root();
 
@@ -124,9 +136,9 @@ where
         if self.0.committment_ood_samples > 0 {
             merlin.fill_challenge_scalars(&mut ood_points)?;
             ood_points
-                .iter()
-                .enumerate()
-                .for_each(|(point_index, ood_point)| {
+                .par_iter()
+                .zip(ood_answers.par_chunks_mut(polys.len()))
+                .for_each(|(ood_point, ood_answers)| {
                     for j in 0..polys.len() {
                         let eval = polys[j].evaluate_at_extension(
                             &MultilinearPoint::expand_from_univariate(
@@ -134,16 +146,18 @@ where
                                 self.0.mv_parameters.num_variables,
                             ),
                         );
-                        ood_answers[point_index * polys.len() + j] = eval;
+                        ood_answers[j] = eval;
                     }
                 });
             merlin.add_scalars(&ood_answers)?;
         }
 
         let polys = polys
-            .into_iter()
+            .into_par_iter()
             .map(|poly| poly.clone().to_extension())
             .collect::<Vec<_>>();
+
+        end_timer!(timer);
 
         Ok(Witnesses {
             polys,

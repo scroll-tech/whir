@@ -68,6 +68,7 @@ where
             + PoWChallenge
             + DigestWriter<MerkleConfig>,
     {
+        let prove_timer = start_timer!(|| "prove");
         assert!(self.0.initial_statement, "must be true for pcs");
         assert!(self.validate_parameters());
         assert!(self.validate_witnesses(&witness));
@@ -149,9 +150,10 @@ where
             batching_randomness: random_coeff,
         };
 
-        let timer = start_timer!("round_batch");
+        let timer = start_timer!(|| "round_batch");
         let result = self.round_batch(merlin, round_state, num_polys);
         end_timer!(timer);
+        end_timer!(prove_timer);
 
         result
     }

@@ -14,6 +14,7 @@ use crate::{
 use ark_crypto_primitives::merkle_tree::{Config, MerkleTree, MultiPath};
 use ark_ff::FftField;
 use ark_poly::EvaluationDomain;
+use ark_std::{end_timer, start_timer};
 use nimue::{
     plugins::ark::{FieldChallenges, FieldWriter},
     ByteChallenges, ByteWriter, ProofResult,
@@ -72,12 +73,18 @@ where
         witness: Witness<F, MerkleConfig>,
     ) -> ProofResult<WhirProof<MerkleConfig, F>>
     where
-        Merlin: FieldChallenges<F> + FieldWriter<F> + ByteChallenges + ByteWriter + PoWChallenge + DigestWriter<MerkleConfig>,
+        Merlin: FieldChallenges<F>
+            + FieldWriter<F>
+            + ByteChallenges
+            + ByteWriter
+            + PoWChallenge
+            + DigestWriter<MerkleConfig>,
     {
         assert!(self.validate_parameters());
         assert!(self.validate_statement(&statement));
         assert!(self.validate_witness(&witness));
 
+        let timer = start_timer!(|| "Single Prover");
         let initial_claims: Vec<_> = witness
             .ood_points
             .into_iter()
@@ -144,7 +151,13 @@ where
             merkle_proofs: vec![],
         };
 
-        self.round(merlin, round_state)
+        let round_timer = start_timer!(|| "Single Round");
+        let result = self.round(merlin, round_state);
+        end_timer!(round_timer);
+
+        end_timer!(timer);
+
+        result
     }
 
     pub(crate) fn round<Merlin>(
@@ -153,7 +166,12 @@ where
         mut round_state: RoundState<F, MerkleConfig>,
     ) -> ProofResult<WhirProof<MerkleConfig, F>>
     where
-        Merlin: FieldChallenges<F> + ByteChallenges + FieldWriter<F> + ByteWriter + PoWChallenge + DigestWriter<MerkleConfig>,
+        Merlin: FieldChallenges<F>
+            + ByteChallenges
+            + FieldWriter<F>
+            + ByteWriter
+            + PoWChallenge
+            + DigestWriter<MerkleConfig>,
     {
         // Fold the coefficients
         let folded_coefficients = round_state
@@ -175,7 +193,7 @@ where
                 self.0.final_queries,
                 merlin,
             )?;
-            
+
             let merkle_proof = round_state
                 .prev_merkle
                 .generate_multi_proof(final_challenge_indexes.clone())
@@ -350,11 +368,12 @@ where
                 )
             });
 
-        let folding_randomness = sumcheck_prover.compute_sumcheck_polynomials::<PowStrategy, Merlin>(
-            merlin,
-            self.0.folding_factor,
-            round_params.folding_pow_bits,
-        )?;
+        let folding_randomness = sumcheck_prover
+            .compute_sumcheck_polynomials::<PowStrategy, Merlin>(
+                merlin,
+                self.0.folding_factor,
+                round_params.folding_pow_bits,
+            )?;
 
         let round_state = RoundState {
             round: round_state.round + 1,

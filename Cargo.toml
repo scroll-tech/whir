@@ -45,3 +45,4 @@ parallel = [
 ]
 rayon = ["dep:rayon"]
 ceno = []
+print-trace = ["ark-std/print-trace"]

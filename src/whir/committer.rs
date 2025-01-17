@@ -7,6 +7,7 @@ use crate::{
 use ark_crypto_primitives::merkle_tree::{Config, MerkleTree};
 use ark_ff::FftField;
 use ark_poly::EvaluationDomain;
+use ark_std::{end_timer, start_timer};
 use derive_more::Debug;
 use nimue::{
     plugins::ark::{FieldChallenges, FieldWriter},
@@ -30,7 +31,9 @@ where
     pub(crate) ood_answers: Vec<F>,
 }
 
-pub struct Committer<F, MerkleConfig, PowStrategy>(pub(crate) WhirConfig<F, MerkleConfig, PowStrategy>)
+pub struct Committer<F, MerkleConfig, PowStrategy>(
+    pub(crate) WhirConfig<F, MerkleConfig, PowStrategy>,
+)
 where
     F: FftField,
     MerkleConfig: Config;
@@ -38,7 +41,7 @@ where
 impl<F, MerkleConfig, PowStrategy> Committer<F, MerkleConfig, PowStrategy>
 where
     F: FftField,
-    MerkleConfig: Config<Leaf = [F]>
+    MerkleConfig: Config<Leaf = [F]>,
 {
     pub fn new(config: WhirConfig<F, MerkleConfig, PowStrategy>) -> Self {
         Self(config)
@@ -52,6 +55,7 @@ where
     where
         Merlin: FieldWriter<F> + FieldChallenges<F> + ByteWriter + DigestWriter<MerkleConfig>,
     {
+        let timer = start_timer!(|| "Single Commit");
         let base_domain = self.0.starting_domain.base_domain.unwrap();
         let expansion = base_domain.size() / polynomial.num_coeffs();
         let evals = expand_from_coeff(polynomial.coeffs(), expansion);
@@ -82,12 +86,14 @@ where
         #[cfg(feature = "parallel")]
         let leafs_iter = folded_evals.par_chunks_exact(fold_size);
 
+        let merkle_build_timer = start_timer!(|| "Single Merkle Tree Build");
         let merkle_tree = MerkleTree::<MerkleConfig>::new(
             &self.0.leaf_hash_params,
             &self.0.two_to_one_params,
             leafs_iter,
         )
         .unwrap();
+        end_timer!(merkle_build_timer);
 
         let root = merkle_tree.root();
 
@@ -105,6 +111,8 @@ where
             }));
             merlin.add_scalars(&ood_answers)?;
         }
+
+        end_timer!(timer);
 
         Ok(Witness {
             polynomial: polynomial.to_extension(),

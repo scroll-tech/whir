@@ -1,4 +1,4 @@
-use super::merkle_config::{Blake3ConfigWrapper, WhirMerkleConfigWrapper};
+use super::merkle_config::{KeccakConfigWrapper, WhirMerkleConfigWrapper};
 use super::{Error, PolynomialCommitmentScheme};
 use crate::crypto::merkle_tree::blake3::{self as mt};
 use crate::parameters::{
@@ -18,6 +18,7 @@ use nimue::plugins::ark::{FieldChallenges, FieldWriter};
 pub use nimue::DefaultHash;
 use nimue::IOPattern;
 use nimue_pow::blake3::Blake3PoW;
+use nimue_pow::keccak::KeccakPoW;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -82,11 +83,11 @@ type PowOf<Spec, E> =
 pub struct WhirDefaultSpec;
 
 impl<E: FftField> WhirSpec<E> for WhirDefaultSpec {
-    type MerkleConfigWrapper = Blake3ConfigWrapper<E>;
-    fn get_parameters(num_variables: usize) -> WhirParameters<MerkleConfigOf<Self, E>, Blake3PoW> {
+    type MerkleConfigWrapper = KeccakConfigWrapper<E>;
+    fn get_parameters(num_variables: usize) -> WhirParameters<MerkleConfigOf<Self, E>, KeccakPoW> {
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
         let (leaf_hash_params, two_to_one_params) = mt::default_config::<E>(&mut rng);
-        WhirParameters::<MerkleConfigOf<Self, E>, Blake3PoW> {
+        WhirParameters::<MerkleConfigOf<Self, E>, KeccakPoW> {
             initial_statement: true,
             security_level: 100,
             pow_bits: default_max_pow(num_variables, 1),

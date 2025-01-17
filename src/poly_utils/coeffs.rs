@@ -36,14 +36,18 @@ where
 
     /// Linearly combine the given polynomials using the given coefficients
     pub fn combine(polys: Vec<Self>, coeffs: &[F]) -> Self {
-        let mut combined_coeffs = vec![F::ZERO; polys[0].coeffs.len()];
-        polys.iter().enumerate().for_each(|(poly_index, poly)| {
-            for i in 0..combined_coeffs.len() {
-                combined_coeffs[i] += poly.coeff_at(i) * coeffs[poly_index];
-            }
-        });
-
-        Self::new(combined_coeffs)
+        Self::new(
+            (0..polys[0].coeffs.len())
+                .into_par_iter()
+                .map(|i| {
+                    let mut acc = F::ZERO;
+                    for (poly, coeff) in polys.iter().zip(coeffs) {
+                        acc += poly.coeff_at(i) * coeff;
+                    }
+                    acc
+                })
+                .collect(),
+        )
     }
 
     /// Evaluate the given polynomial at `point` from {0,1}^n

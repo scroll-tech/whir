@@ -69,6 +69,7 @@ where
             + DigestWriter<MerkleConfig>,
     {
         let prove_timer = start_timer!(|| "prove");
+        let initial_timer = start_timer!(|| "init");
         assert!(self.0.initial_statement, "must be true for pcs");
         assert!(self.validate_parameters());
         assert!(self.validate_witnesses(&witness));
@@ -86,10 +87,14 @@ where
 
         let compute_dot_product =
             |evals: &[F], coeff: &[F]| -> F { zip_eq(evals, coeff).map(|(a, b)| *a * *b).sum() };
+        end_timer!(initial_timer);
 
+        let random_coeff_timer = start_timer!(|| "random coeff");
         let random_coeff =
             super::utils::generate_random_vector_batch_open(merlin, witness.polys.len())?;
+        end_timer!(random_coeff_timer);
 
+        let initial_claims_timer = start_timer!(|| "initial claims");
         let initial_claims: Vec<_> = witness
             .ood_points
             .into_par_iter()
@@ -101,32 +106,45 @@ where
             })
             .chain(rayon::iter::once(MultilinearPoint(point.to_vec())))
             .collect();
+        end_timer!(initial_claims_timer);
 
+        let ood_answers_timer = start_timer!(|| "ood answers");
         let ood_answers = witness
             .ood_answers
             .par_chunks_exact(witness.polys.len())
             .map(|answer| compute_dot_product(answer, &random_coeff))
             .collect::<Vec<_>>();
-        let eval = compute_dot_product(evals, &random_coeff);
+        end_timer!(ood_answers_timer);
 
+        let eval_timer = start_timer!(|| "eval");
+        let eval = compute_dot_product(evals, &random_coeff);
+        end_timer!(eval_timer);
+
+        let combine_timer = start_timer!(|| "Combine polynomial");
         let initial_answers: Vec<_> = ood_answers
             .into_iter()
             .chain(std::iter::once(eval))
             .collect();
 
         let polynomial = CoefficientList::combine(witness.polys, &random_coeff);
+        end_timer!(combine_timer);
 
+        let comb_timer = start_timer!(|| "combination randomness");
         let [combination_randomness_gen] = merlin.challenge_scalars()?;
         let combination_randomness =
             expand_randomness(combination_randomness_gen, initial_claims.len());
+        end_timer!(comb_timer);
 
+        let sumcheck_timer = start_timer!(|| "sumcheck");
         let mut sumcheck_prover = Some(SumcheckProverNotSkipping::new(
             polynomial.clone(),
             &initial_claims,
             &combination_randomness,
             &initial_answers,
         ));
+        end_timer!(sumcheck_timer);
 
+        let sumcheck_prover_timer = start_timer!(|| "sumcheck_prover");
         let folding_randomness = sumcheck_prover
             .as_mut()
             .unwrap()
@@ -135,7 +153,9 @@ where
                 self.0.folding_factor,
                 self.0.starting_folding_pow_bits,
             )?;
+        end_timer!(sumcheck_prover_timer);
 
+        let timer = start_timer!(|| "round_batch");
         let round_state = RoundStateBatch {
             round_state: RoundState {
                 domain: self.0.starting_domain.clone(),
@@ -150,7 +170,6 @@ where
             batching_randomness: random_coeff,
         };
 
-        let timer = start_timer!(|| "round_batch");
         let result = self.round_batch(merlin, round_state, num_polys);
         end_timer!(timer);
         end_timer!(prove_timer);

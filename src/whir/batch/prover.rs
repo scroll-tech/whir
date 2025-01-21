@@ -58,7 +58,7 @@ where
         merlin: &mut Merlin,
         point: &[F],
         evals: &[F],
-        witness: Witnesses<F, MerkleConfig>,
+        witness: &Witnesses<F, MerkleConfig>,
     ) -> ProofResult<WhirProof<MerkleConfig, F>>
     where
         Merlin: FieldChallenges<F>
@@ -97,10 +97,10 @@ where
         let initial_claims_timer = start_timer!(|| "initial claims");
         let initial_claims: Vec<_> = witness
             .ood_points
-            .into_par_iter()
+            .par_iter()
             .map(|ood_point| {
                 MultilinearPoint::expand_from_univariate(
-                    ood_point,
+                    *ood_point,
                     self.0.mv_parameters.num_variables,
                 )
             })
@@ -126,7 +126,7 @@ where
             .chain(std::iter::once(eval))
             .collect();
 
-        let polynomial = CoefficientList::combine(witness.polys, &random_coeff);
+        let polynomial = CoefficientList::combine(&witness.polys, &random_coeff);
         end_timer!(combine_timer);
 
         let comb_timer = start_timer!(|| "combination randomness");

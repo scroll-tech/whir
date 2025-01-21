@@ -35,7 +35,7 @@ where
     }
 
     /// Linearly combine the given polynomials using the given coefficients
-    pub fn combine(polys: Vec<Self>, coeffs: &[F]) -> Self {
+    pub fn combine(polys: &[Self], coeffs: &[F]) -> Self {
         Self::new(
             (0..polys[0].coeffs.len())
                 .into_par_iter()

@@ -273,7 +273,7 @@ where
 
     fn open(
         pp: &Self::Param,
-        witness: Self::CommitmentWithWitness,
+        witness: &Self::CommitmentWithWitness,
         point: &[E],
         eval: &E,
     ) -> Result<Self::Proof, Error> {
@@ -314,7 +314,7 @@ where
             &prover,
             &mut merlin,
             statement,
-            witness.witness.into(),
+            witness.witness.clone().into(),
         )?;
 
         Ok(WhirProofWrapper {
@@ -325,7 +325,7 @@ where
 
     fn simple_batch_open(
         pp: &Self::Param,
-        witness: Self::CommitmentWithWitness,
+        witness: &Self::CommitmentWithWitness,
         point: &[E],
         evals: &[E],
     ) -> Result<Self::Proof, Error> {
@@ -364,7 +364,7 @@ where
             &mut merlin,
             point,
             evals,
-            witness.witness,
+            &witness.witness,
         )?;
 
         Ok(WhirProofWrapper {

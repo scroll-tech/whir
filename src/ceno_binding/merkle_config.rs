@@ -43,7 +43,7 @@ pub trait WhirMerkleConfigWrapper<F: FftField> {
         merlin: &mut Merlin,
         point: &[F],
         evals: &[F],
-        witness: Witnesses<F, Self::MerkleConfig>,
+        witness: &Witnesses<F, Self::MerkleConfig>,
     ) -> ProofResult<WhirProof<Self::MerkleConfig, F>>;
 
     fn verify_with_arthur(
@@ -125,7 +125,7 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for Blake3ConfigWrapper<F> {
         merlin: &mut Merlin,
         point: &[F],
         evals: &[F],
-        witness: Witnesses<F, Self::MerkleConfig>,
+        witness: &Witnesses<F, Self::MerkleConfig>,
     ) -> ProofResult<WhirProof<Self::MerkleConfig, F>> {
         prover.simple_batch_prove(merlin, point, evals, witness)
     }
@@ -220,7 +220,7 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for KeccakConfigWrapper<F> {
         merlin: &mut Merlin,
         point: &[F],
         evals: &[F],
-        witness: Witnesses<F, Self::MerkleConfig>,
+        witness: &Witnesses<F, Self::MerkleConfig>,
     ) -> ProofResult<WhirProof<Self::MerkleConfig, F>> {
         prover.simple_batch_prove(merlin, point, evals, witness)
     }

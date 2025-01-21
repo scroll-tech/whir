@@ -163,10 +163,17 @@ where
                 sumcheck_prover,
                 folding_randomness,
                 coefficients: polynomial,
-                prev_merkle: witness.merkle_tree,
-                prev_merkle_answers: witness.merkle_leaves,
+                prev_merkle: MerkleTree::blank(
+                    &self.0.leaf_hash_params,
+                    &self.0.two_to_one_params,
+                    2,
+                )
+                .unwrap(),
+                prev_merkle_answers: Vec::new(),
                 merkle_proofs: vec![],
             },
+            prev_merkle: &witness.merkle_tree,
+            prev_merkle_answers: &witness.merkle_leaves,
             batching_randomness: random_coeff,
         };
 
@@ -192,6 +199,8 @@ where
             + DigestWriter<MerkleConfig>,
     {
         let batching_randomness = round_state.batching_randomness;
+        let prev_merkle = round_state.prev_merkle;
+        let prev_merkle_answers = round_state.prev_merkle_answers;
         let mut round_state = round_state.round_state;
         // Fold the coefficients
         let folded_coefficients = round_state
@@ -214,16 +223,13 @@ where
                 merlin,
             )?;
 
-            let merkle_proof = round_state
-                .prev_merkle
+            let merkle_proof = prev_merkle
                 .generate_multi_proof(final_challenge_indexes.clone())
                 .unwrap();
             let fold_size = 1 << self.0.folding_factor;
             let answers = final_challenge_indexes
                 .into_par_iter()
-                .map(|i| {
-                    round_state.prev_merkle_answers[i * fold_size..(i + 1) * fold_size].to_vec()
-                })
+                .map(|i| prev_merkle_answers[i * fold_size..(i + 1) * fold_size].to_vec())
                 .collect();
             round_state.merkle_proofs.push((merkle_proof, answers));
 
@@ -315,14 +321,13 @@ where
             .map(|univariate| MultilinearPoint::expand_from_univariate(univariate, num_variables))
             .collect();
 
-        let merkle_proof = round_state
-            .prev_merkle
+        let merkle_proof = prev_merkle
             .generate_multi_proof(stir_challenges_indexes.clone())
             .unwrap();
         let fold_size = (1 << self.0.folding_factor) * num_polys;
         let answers = stir_challenges_indexes
             .par_iter()
-            .map(|i| round_state.prev_merkle_answers[i * fold_size..(i + 1) * fold_size].to_vec())
+            .map(|i| prev_merkle_answers[i * fold_size..(i + 1) * fold_size].to_vec())
             .collect::<Vec<_>>();
         let batched_answers = answers
             .par_iter()
@@ -426,11 +431,13 @@ where
     }
 }
 
-struct RoundStateBatch<F, MerkleConfig>
+struct RoundStateBatch<'a, F, MerkleConfig>
 where
     F: FftField,
     MerkleConfig: Config,
 {
     round_state: RoundState<F, MerkleConfig>,
     batching_randomness: Vec<F>,
+    prev_merkle: &'a MerkleTree<MerkleConfig>,
+    prev_merkle_answers: &'a Vec<F>,
 }

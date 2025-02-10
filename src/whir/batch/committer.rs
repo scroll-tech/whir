@@ -81,6 +81,8 @@ where
 
         assert_eq!(base_domain.size(), evals[0].len());
 
+        // These stacking operations are bottleneck of the commitment process.
+        // Try to finish the tasks with as few allocations as possible.
         let stack_evaluations_timer = start_timer!(|| "Stack Evaluations");
         let folded_evals = evals
             .into_par_iter()
@@ -94,12 +96,7 @@ where
                     self.0.folding_factor,
                 )
             })
-            .flat_map(|evals| {
-                evals
-                    .into_par_iter()
-                    .map(F::from_base_prime_field)
-                    .collect::<Vec<_>>()
-            })
+            .flat_map(|evals| evals.into_par_iter().map(F::from_base_prime_field))
             .collect::<Vec<_>>();
         end_timer!(stack_evaluations_timer);
 

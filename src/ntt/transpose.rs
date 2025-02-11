@@ -63,10 +63,14 @@ pub fn transpose_bench_allocate<F: Sized + Copy + Send>(
         let mut scratch = vec![matrix[0]; rows * cols];
         end_timer!(allocate_timer);
         for matrix in matrix.chunks_exact_mut(rows * cols) {
+            let copy_timer = start_timer!(|| "Copy from slice.");
             scratch.copy_from_slice(matrix);
+            end_timer!(copy_timer);
             let src = MatrixMut::from_mut_slice(scratch.as_mut_slice(), rows, cols);
             let dst = MatrixMut::from_mut_slice(matrix, cols, rows);
+            let transpose_copy_timer = start_timer!(|| "Transpose Copy.");
             transpose_copy(src, dst);
+            end_timer!(transpose_copy_timer);
         }
     }
 }

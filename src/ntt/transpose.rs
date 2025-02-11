@@ -2,7 +2,6 @@ use super::super::utils::is_power_of_two;
 use super::{utils::workload_size, MatrixMut};
 use std::mem::swap;
 
-use ark_ff::Zero;
 use ark_std::{end_timer, start_timer};
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 #[cfg(feature = "parallel")]
@@ -30,7 +29,9 @@ pub fn transpose<F: Sized + Copy + Send>(matrix: &mut [F], rows: usize, cols: us
     } else {
         // TODO: Special case for rows = 2 * cols and cols = 2 * rows.
         // TODO: Special case for very wide matrices (e.g. n x 16).
+        let allocate_timer = start_timer!(|| "Allocate scratch.");
         let mut scratch = vec![matrix[0]; rows * cols];
+        end_timer!(allocate_timer);
         for matrix in matrix.chunks_exact_mut(rows * cols) {
             scratch.copy_from_slice(matrix);
             let src = MatrixMut::from_mut_slice(scratch.as_mut_slice(), rows, cols);

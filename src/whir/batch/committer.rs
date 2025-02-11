@@ -86,15 +86,23 @@ where
         let stack_evaluations_timer = start_timer!(|| "Stack Evaluations");
         let folded_evals = evals
             .into_par_iter()
-            .map(|evals| utils::stack_evaluations(evals, self.0.folding_factor))
             .map(|evals| {
-                restructure_evaluations(
+                let sub_stack_evaluations_timer = start_timer!(|| "Restructure Evaluations");
+                let ret = utils::stack_evaluations(evals, self.0.folding_factor);
+                end_timer!(sub_stack_evaluations_timer);
+                ret
+            })
+            .map(|evals| {
+                let restructure_evaluations_timer = start_timer!(|| "Restructure Evaluations");
+                let ret = restructure_evaluations(
                     evals,
                     self.0.fold_optimisation,
                     base_domain.group_gen(),
                     base_domain.group_gen_inv(),
                     self.0.folding_factor,
-                )
+                );
+                end_timer!(restructure_evaluations_timer);
+                ret
             })
             .flat_map(|evals| evals.into_par_iter().map(F::from_base_prime_field))
             .collect::<Vec<_>>();

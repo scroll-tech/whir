@@ -1,10 +1,11 @@
 use crate::{
-    ntt::transpose,
+    ntt::{transpose, transpose_test},
     utils::expand_randomness,
     whir::fs_utils::{DigestReader, DigestWriter},
 };
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::Field;
+use ark_std::{end_timer, start_timer};
 use nimue::{
     plugins::ark::{FieldChallenges, FieldReader, FieldWriter},
     ByteReader, ByteWriter, ProofResult,
@@ -17,7 +18,7 @@ pub fn stack_evaluations<F: Field>(mut evals: Vec<F>, folding_factor: usize) -> 
     let size_of_new_domain = evals.len() / folding_factor;
 
     // interpret evals as (folding_factor_exp x size_of_new_domain)-matrix and transpose in-place
-    transpose(&mut evals, folding_factor, size_of_new_domain);
+    transpose_test(&mut evals, folding_factor, size_of_new_domain);
     evals
 }
 
@@ -45,12 +46,16 @@ pub fn horizontal_stacking<F: Field>(
     let fold_size = 1 << folding_factor;
     let num_polys: usize = evals.len() / domain_size;
 
+    let stack_evaluation_timer = start_timer!(|| "Stack Evaluation");
     let mut evals = stack_evaluations(evals, num_polys);
+    end_timer!(stack_evaluation_timer);
     #[cfg(not(feature = "parallel"))]
     let stacked_evals = evals.chunks_exact_mut(fold_size * num_polys);
     #[cfg(feature = "parallel")]
     let stacked_evals = evals.par_chunks_exact_mut(fold_size * num_polys);
+    let stack_evaluation_mut_timer = start_timer!(|| "Stack Evaluation Mut");
     stacked_evals.for_each(|eval| stack_evaluations_mut(eval, folding_factor));
+    end_timer!(stack_evaluation_mut_timer);
     evals
 }
 

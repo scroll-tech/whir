@@ -87,7 +87,7 @@ where
         let folded_evals = evals
             .into_par_iter()
             .map(|evals| {
-                let sub_stack_evaluations_timer = start_timer!(|| "Restructure Evaluations");
+                let sub_stack_evaluations_timer = start_timer!(|| "Sub Stack Evaluations");
                 let ret = utils::stack_evaluations(evals, self.0.folding_factor);
                 end_timer!(sub_stack_evaluations_timer);
                 ret

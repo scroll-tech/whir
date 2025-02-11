@@ -86,7 +86,7 @@ where
         let stack_evaluations_timer = start_timer!(|| "Stack Evaluations");
         let folded_evals = evals
             .into_par_iter()
-            .map(|evals| utils::stack_evaluations_bench_allocate(evals, self.0.folding_factor))
+            .map(|evals| utils::stack_evaluations(evals, self.0.folding_factor))
             .map(|evals| {
                 restructure_evaluations(
                     evals,

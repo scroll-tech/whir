@@ -101,7 +101,10 @@ where
         end_timer!(stack_evaluations_timer);
 
         let allocate_timer = start_timer!(|| "Allocate buffer.");
-        let mut buffer = vec![F::zero(); folded_evals.len()];
+        let mut buffer = Vec::with_capacity(folded_evals.len());
+        unsafe {
+            buffer.set_len(folded_evals.len());
+        }
         end_timer!(allocate_timer);
         let horizontal_stacking_timer = start_timer!(|| "Horizontal Stacking");
         let folded_evals = super::utils::horizontal_stacking(

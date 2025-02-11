@@ -14,8 +14,7 @@ use rayon::prelude::*;
 
 pub use self::{
     ntt::{intt, intt_batch, ntt, ntt_batch},
-    transpose::transpose,
-    transpose::transpose_test,
+    transpose::{transpose, transpose_bench_allocate, transpose_test},
     wavelet::wavelet_transform,
 };
 

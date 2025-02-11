@@ -29,6 +29,36 @@ pub fn transpose<F: Sized + Copy + Send>(matrix: &mut [F], rows: usize, cols: us
     } else {
         // TODO: Special case for rows = 2 * cols and cols = 2 * rows.
         // TODO: Special case for very wide matrices (e.g. n x 16).
+        let mut scratch = vec![matrix[0]; rows * cols];
+        for matrix in matrix.chunks_exact_mut(rows * cols) {
+            scratch.copy_from_slice(matrix);
+            let src = MatrixMut::from_mut_slice(scratch.as_mut_slice(), rows, cols);
+            let dst = MatrixMut::from_mut_slice(matrix, cols, rows);
+            transpose_copy(src, dst);
+        }
+    }
+}
+
+pub fn transpose_bench_allocate<F: Sized + Copy + Send>(
+    matrix: &mut [F],
+    rows: usize,
+    cols: usize,
+) {
+    debug_assert_eq!(matrix.len() % (rows * cols), 0);
+    // eprintln!(
+    //     "Transpose {} x {rows} x {cols} matrix.",
+    //     matrix.len() / (rows * cols)
+    // );
+    if rows == cols {
+        debug_assert!(is_power_of_two(rows));
+        debug_assert!(is_power_of_two(cols));
+        for matrix in matrix.chunks_exact_mut(rows * cols) {
+            let matrix = MatrixMut::from_mut_slice(matrix, rows, cols);
+            transpose_square(matrix);
+        }
+    } else {
+        // TODO: Special case for rows = 2 * cols and cols = 2 * rows.
+        // TODO: Special case for very wide matrices (e.g. n x 16).
         let allocate_timer = start_timer!(|| "Allocate scratch.");
         let mut scratch = vec![matrix[0]; rows * cols];
         end_timer!(allocate_timer);

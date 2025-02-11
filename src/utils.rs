@@ -1,4 +1,4 @@
-use crate::ntt::transpose;
+use crate::ntt::{transpose, transpose_bench_allocate};
 use ark_ff::Field;
 use std::collections::BTreeSet;
 
@@ -80,6 +80,19 @@ pub fn stack_evaluations<F: Field>(mut evals: Vec<F>, folding_factor: usize) -> 
 
     // interpret evals as (folding_factor_exp x size_of_new_domain)-matrix and transpose in-place
     transpose(&mut evals, folding_factor_exp, size_of_new_domain);
+    evals
+}
+
+pub fn stack_evaluations_bench_allocate<F: Field>(
+    mut evals: Vec<F>,
+    folding_factor: usize,
+) -> Vec<F> {
+    let folding_factor_exp = 1 << folding_factor;
+    assert!(evals.len() % folding_factor_exp == 0);
+    let size_of_new_domain = evals.len() / folding_factor_exp;
+
+    // interpret evals as (folding_factor_exp x size_of_new_domain)-matrix and transpose in-place
+    transpose_bench_allocate(&mut evals, folding_factor_exp, size_of_new_domain);
     evals
 }
 

@@ -229,8 +229,9 @@ where
             let fold_size = 1 << self.0.folding_factor;
             let answers = final_challenge_indexes
                 .into_par_iter()
-                .map(|i| prev_merkle_answers[i * fold_size..(i + 1) * fold_size].to_vec())
+                .map(|i| prev_merkle_answers[i * (fold_size * num_polys)..(i + 1) * (fold_size * num_polys)].to_vec())
                 .collect();
+
             round_state.merkle_proofs.push((merkle_proof, answers));
 
             // PoW

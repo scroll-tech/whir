@@ -325,11 +325,17 @@ where
                 .collect(),
         );
 
+        let statment_points: Vec<MultilinearPoint<F>> = statement.points.clone().into_iter().map(|mut p| {
+            while p.n_variables() < self.params.folding_factor {
+                p.0.insert(0, F::ONE);
+            }
+            p
+        }).collect();
         let mut value = parsed_commitment
             .ood_points
             .iter()
             .map(|ood_point| MultilinearPoint::expand_from_univariate(*ood_point, num_variables))
-            .chain(statement.points.clone())
+            .chain(statment_points)
             .zip(&proof.initial_combination_randomness)
             .map(|(point, randomness)| *randomness * eq_poly_outside(&point, &folding_randomness))
             .sum();

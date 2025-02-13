@@ -50,12 +50,15 @@ where
     pub fn commit<Merlin>(
         &self,
         merlin: &mut Merlin,
-        polynomial: CoefficientList<F::BasePrimeField>,
+        mut polynomial: CoefficientList<F::BasePrimeField>,
     ) -> ProofResult<Witness<F, MerkleConfig>>
     where
         Merlin: FieldWriter<F> + FieldChallenges<F> + ByteWriter + DigestWriter<MerkleConfig>,
     {
         let timer = start_timer!(|| "Single Commit");
+        // If size of polynomial < folding factor, keep doubling polynomial size by cloning itself
+        polynomial.pad_to_num_vars(self.0.folding_factor);
+
         let base_domain = self.0.starting_domain.base_domain.unwrap();
         let expansion = base_domain.size() / polynomial.num_coeffs();
         let evals = expand_from_coeff(polynomial.coeffs(), expansion);

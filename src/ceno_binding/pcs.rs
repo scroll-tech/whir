@@ -90,7 +90,7 @@ impl<E: FftField> WhirSpec<E> for WhirDefaultSpec {
             initial_statement: true,
             security_level: 100,
             pow_bits: default_max_pow(num_variables, 1),
-            folding_factor: 2,
+            folding_factor: 4,
             leaf_hash_params,
             two_to_one_params,
             soundness_type: SoundnessType::ConjectureList,

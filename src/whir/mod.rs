@@ -122,7 +122,7 @@ mod tests {
 
     #[test]
     fn test_whir() {
-        let folding_factors = [1, 2, 3, 4];
+        let folding_factors = [2, 3, 4, 5];
         let soundness_type = [
             SoundnessType::ConjectureList,
             SoundnessType::ProvableList,
@@ -133,7 +133,7 @@ mod tests {
         let pow_bits = [0, 5, 10];
 
         for folding_factor in folding_factors {
-            let num_variables = folding_factor..=3 * folding_factor;
+            let num_variables = folding_factor - 1..= 2 * folding_factor;
             for num_variables in num_variables {
                 for fold_type in fold_types {
                     for num_points in num_points {

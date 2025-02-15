@@ -92,7 +92,7 @@ where
             num_polys,
         )?;
 
-        let computed_folds = self.compute_folds_batched(&parsed, &random_coeff);
+        let computed_folds = self.compute_folds(&parsed);
 
         let mut prev: Option<(SumcheckPolynomial<F>, F)> = None;
         if let Some(round) = parsed.initial_sumcheck_rounds.first() {
@@ -447,6 +447,29 @@ where
             return Err(ProofError::InvalidProof);
         }
 
+        let final_randomness_answers: Vec<_> = if self.params.n_rounds() == 0 {
+            final_randomness_answers
+                .into_iter()
+                .map(|raw_answer| {
+                    if batched_randomness.len() > 0 {
+                        let chunk_size = 1 << self.params.folding_factor;
+                        let mut res = vec![F::ZERO; chunk_size];
+                        for i in 0..chunk_size {
+                            for j in 0..num_polys {
+                                res[i] +=
+                                    raw_answer[i + j * chunk_size] * batched_randomness[j];
+                            }
+                        }
+                        res
+                    } else {
+                        raw_answer.clone()
+                    }
+                })
+                .collect()
+        } else {
+            final_randomness_answers.to_vec()
+        };
+
         if self.params.final_pow_bits > 0. {
             arthur.challenge_pow::<PowStrategy>(self.params.final_pow_bits)?;
         }
@@ -534,127 +557,5 @@ where
         }
 
         value
-    }
-
-    pub(crate) fn compute_folds_batched(&self, parsed: &ParsedProof<F>, random_coeff: &Vec<F>) -> Vec<Vec<F>> {
-        match self.params.fold_optimisation {
-            FoldType::Naive => self.compute_folds_full_batched(parsed, random_coeff),
-            FoldType::ProverHelps => self.compute_folds_helped_batched(parsed, random_coeff),
-        }
-    }
-
-    fn compute_folds_full_batched(&self, parsed: &ParsedProof<F>, random_coeff: &Vec<F>) -> Vec<Vec<F>> {
-        let mut domain_size = self.params.starting_domain.backing_domain.size();
-        let coset_domain_size = 1 << self.params.folding_factor;
-        let fold_size = coset_domain_size;
-
-        let mut result = Vec::new();
-
-        for round in &parsed.rounds {
-            // This is such that coset_generator^coset_domain_size = F::ONE
-            //let _coset_generator = domain_gen.pow(&[(domain_size / coset_domain_size) as u64]);
-            let coset_generator_inv = round
-                .domain_gen_inv
-                .pow([(domain_size / coset_domain_size) as u64]);
-
-            let evaluations: Vec<_> = round
-                .stir_challenges_indexes
-                .iter()
-                .zip(&round.stir_challenges_answers)
-                .map(|(index, answers)| {
-                    // Perform RLC on answers
-                    let answers = &answers.chunks(fold_size).zip(random_coeff).fold(
-                        vec![F::ZERO; fold_size],
-                        |r, (p, c)| r.into_iter().zip(p).map(|(ri, pi)| ri + c.clone() * pi.clone()).collect()
-                    );
-
-                    // The coset is w^index * <w_coset_generator>
-                    //let _coset_offset = domain_gen.pow(&[*index as u64]);
-                    let coset_offset_inv = round.domain_gen_inv.pow([*index as u64]);
-
-                    compute_fold(
-                        answers,
-                        &round.folding_randomness.0,
-                        coset_offset_inv,
-                        coset_generator_inv,
-                        self.two_inv,
-                        self.params.folding_factor,
-                    )
-                })
-                .collect();
-            result.push(evaluations);
-            domain_size /= 2;
-        }
-
-        let domain_gen_inv = parsed.final_domain_gen_inv;
-
-        // Final round
-        let coset_generator_inv = domain_gen_inv.pow([(domain_size / coset_domain_size) as u64]);
-        let evaluations: Vec<_> = parsed
-            .final_randomness_indexes
-            .iter()
-            .zip(&parsed.final_randomness_answers)
-            .map(|(index, answers)| {
-                // Perform RLC on answers
-                let answers = &answers.chunks(fold_size).zip(random_coeff).fold(
-                    vec![F::ZERO; fold_size],
-                    |r, (p, c)| r.into_iter().zip(p).map(|(ri, pi)| ri + c.clone() * pi.clone()).collect()
-                );
-
-                // The coset is w^index * <w_coset_generator>
-                //let _coset_offset = domain_gen.pow(&[*index as u64]);
-                let coset_offset_inv = domain_gen_inv.pow([*index as u64]);
-
-                compute_fold(
-                    answers,
-                    &parsed.final_folding_randomness.0,
-                    coset_offset_inv,
-                    coset_generator_inv,
-                    self.two_inv,
-                    self.params.folding_factor,
-                )
-            })
-            .collect();
-        result.push(evaluations);
-
-        result
-    }
-
-    fn compute_folds_helped_batched(&self, parsed: &ParsedProof<F>, random_coeff: &Vec<F>) -> Vec<Vec<F>> {
-        let mut result = Vec::new();
-        let fold_size = 1 << self.params.folding_factor;
-
-        for round in &parsed.rounds {
-            let evaluations: Vec<_> = round
-                .stir_challenges_answers
-                .iter()
-                .map(|answers| {
-                    // Perform RLC on answers
-                    let answers = &answers.chunks(fold_size).zip(random_coeff).fold(
-                        vec![F::ZERO; fold_size],
-                        |r, (p, c)| r.into_iter().zip(p).map(|(ri, pi)| ri + c.clone() * pi.clone()).collect()
-                    );
-                    CoefficientList::new(answers.to_vec()).evaluate(&round.folding_randomness)
-                })
-                .collect();
-            result.push(evaluations);
-        }
-
-        // Final round
-        let evaluations: Vec<_> = parsed
-            .final_randomness_answers
-            .iter()
-            .map(|answers| {
-                // Perform RLC on answers
-                let answers = &answers.chunks(fold_size).zip(random_coeff).fold(
-                    vec![F::ZERO; fold_size],
-                    |r, (p, c)| r.into_iter().zip(p).map(|(ri, pi)| ri + c.clone() * pi.clone()).collect()
-                );
-                CoefficientList::new(answers.to_vec()).evaluate(&parsed.final_folding_randomness)
-            })
-            .collect();
-        result.push(evaluations);
-
-        result
     }
 }

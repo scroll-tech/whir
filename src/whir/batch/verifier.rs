@@ -10,7 +10,7 @@ use nimue::{
 };
 use nimue_pow::{self, PoWChallenge};
 
-use crate::{parameters::FoldType, poly_utils::fold::compute_fold, whir::fs_utils::{get_challenge_stir_queries, DigestReader}};
+use crate::whir::fs_utils::{get_challenge_stir_queries, DigestReader};
 use crate::whir::{
     verifier::{ParsedCommitment, ParsedProof, ParsedRound, Verifier},
     Statement, WhirProof,
@@ -456,8 +456,7 @@ where
                         let mut res = vec![F::ZERO; chunk_size];
                         for i in 0..chunk_size {
                             for j in 0..num_polys {
-                                res[i] +=
-                                    raw_answer[i + j * chunk_size] * batched_randomness[j];
+                                res[i] += raw_answer[i + j * chunk_size] * batched_randomness[j];
                             }
                         }
                         res

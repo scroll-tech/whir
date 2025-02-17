@@ -129,7 +129,10 @@ mod tests {
         pow_bits: usize,
         fold_type: FoldType,
     ) {
-        println!("NP = {num_polynomials}, NV = {num_variables}, FOLD_TYPE = {:?}", fold_type);
+        println!(
+            "NP = {num_polynomials}, NV = {num_variables}, FOLD_TYPE = {:?}",
+            fold_type
+        );
         let num_coeffs = 1 << num_variables;
 
         let mut rng = ark_std::test_rng();
@@ -152,12 +155,15 @@ mod tests {
 
         let params = WhirConfig::<F, MerkleConfig, PowStrategy>::new(mv_params, whir_params);
 
-        let polynomials: Vec<CoefficientList<F>> = (0..num_polynomials).map(|i| 
-            CoefficientList::new(vec![F::from((i + 1) as i32); num_coeffs])
-        ).collect();
+        let polynomials: Vec<CoefficientList<F>> = (0..num_polynomials)
+            .map(|i| CoefficientList::new(vec![F::from((i + 1) as i32); num_coeffs]))
+            .collect();
 
         let point = MultilinearPoint::rand(&mut rng, num_variables);
-        let evals: Vec<F> = polynomials.iter().map(|poly| poly.evaluate(&point)).collect();
+        let evals: Vec<F> = polynomials
+            .iter()
+            .map(|poly| poly.evaluate(&point))
+            .collect();
         let point = point.0;
 
         let io = IOPattern::<DefaultHash>::new("🌪️")
@@ -177,7 +183,9 @@ mod tests {
 
         let verifier = Verifier::new(params);
         let mut arthur = io.to_arthur(merlin.transcript());
-        assert!(verifier.simple_batch_verify(&mut arthur, &point, &evals, &proof).is_ok());
+        assert!(verifier
+            .simple_batch_verify(&mut arthur, &point, &evals, &proof)
+            .is_ok());
         println!("PASSED!");
     }
 
@@ -194,30 +202,30 @@ mod tests {
         let num_polys = [1, 2, 3];
         let pow_bits = [0, 5, 10];
 
-        // for folding_factor in folding_factors {
-        //     let num_variables = folding_factor - 1..= 2 * folding_factor;
-        //     for num_variables in num_variables {
-        //         for fold_type in fold_types {
-        //             for num_points in num_points {
-        //                 for soundness_type in soundness_type {
-        //                     for pow_bits in pow_bits {
-        //                         make_whir_things(
-        //                             num_variables,
-        //                             folding_factor,
-        //                             num_points,
-        //                             soundness_type,
-        //                             pow_bits,
-        //                             fold_type,
-        //                         );
-        //                     }
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
+        for folding_factor in folding_factors {
+            let num_variables = folding_factor - 1..=2 * folding_factor;
+            for num_variables in num_variables {
+                for fold_type in fold_types {
+                    for num_points in num_points {
+                        for soundness_type in soundness_type {
+                            for pow_bits in pow_bits {
+                                make_whir_things(
+                                    num_variables,
+                                    folding_factor,
+                                    num_points,
+                                    soundness_type,
+                                    pow_bits,
+                                    fold_type,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         for folding_factor in folding_factors {
-            let num_variables = folding_factor ..= 3 * folding_factor;
+            let num_variables = folding_factor..=3 * folding_factor;
             for num_variables in num_variables {
                 for fold_type in fold_types {
                     for num_polys in num_polys {

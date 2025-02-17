@@ -64,7 +64,7 @@ where
     MerkleConfig: Config,
 {
     pub fn new(
-        mv_parameters: MultivariateParameters<F>,
+        mut mv_parameters: MultivariateParameters<F>,
         whir_parameters: WhirParameters<MerkleConfig, PowStrategy>,
     ) -> Self {
         // We need to fold at least some time
@@ -72,8 +72,10 @@ where
             whir_parameters.folding_factor > 0,
             "folding factor should be non zero"
         );
-        // If less, just send the damn polynomials
-        assert!(mv_parameters.num_variables >= whir_parameters.folding_factor);
+        // Pad the number of variables to folding factor
+        if mv_parameters.num_variables < whir_parameters.folding_factor {
+            mv_parameters.num_variables = whir_parameters.folding_factor
+        }
 
         let protocol_security_level =
             0.max(whir_parameters.security_level - whir_parameters.pow_bits);

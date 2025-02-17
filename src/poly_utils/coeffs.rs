@@ -34,6 +34,14 @@ where
         self.coeffs[index]
     }
 
+    pub fn pad_to_num_vars(&mut self, num_vars: usize) {
+        if self.num_variables < num_vars {
+            let pad = (1usize << num_vars) - (1usize << self.num_variables);
+            self.coeffs.extend(vec![F::ZERO; pad]);
+            self.num_variables = num_vars;
+        }
+    }
+
     /// Linearly combine the given polynomials using the given coefficients
     pub fn combine(polys: &[Self], coeffs: &[F]) -> Self {
         Self::new(
@@ -179,7 +187,7 @@ impl<F> CoefficientList<F> {
 
     /// Map the polynomial `self` from F[X_1,...,X_n] to E[X_1,...,X_n], where E is a field extension of F.
     ///
-    /// NOte that this is currently restricted to the case where F is a prime field.
+    /// Note that this is currently restricted to the case where F is a prime field.
     pub fn to_extension<E: Field<BasePrimeField = F>>(self) -> CoefficientList<E> {
         CoefficientList::new(
             self.coeffs

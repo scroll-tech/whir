@@ -69,7 +69,7 @@ where
     pub fn prove<Merlin>(
         &self,
         merlin: &mut Merlin,
-        statement: Statement<F>,
+        mut statement: Statement<F>,
         witness: Witness<F, MerkleConfig>,
     ) -> ProofResult<WhirProof<MerkleConfig, F>>
     where
@@ -80,6 +80,13 @@ where
             + PoWChallenge
             + DigestWriter<MerkleConfig>,
     {
+        // If any evaluation point is shorter than the folding factor, pad with 0 in front
+        for p in statement.points.iter_mut() {
+            while p.n_variables() < self.0.folding_factor {
+                p.0.insert(0, F::ONE);
+            }
+        }
+
         assert!(self.validate_parameters());
         assert!(self.validate_statement(&statement));
         assert!(self.validate_witness(&witness));

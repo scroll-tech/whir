@@ -53,7 +53,6 @@ where
             |evals: &[F], coeff: &[F]| -> F { zip_eq(evals, coeff).map(|(a, b)| *a * *b).sum() };
 
         let random_coeff = super::utils::generate_random_vector_batch_verify(arthur, num_polys)?;
-
         let initial_claims: Vec<_> = parsed_commitment
             .ood_points
             .clone()
@@ -89,7 +88,7 @@ where
             &parsed_commitment,
             &statement,
             whir_proof,
-            random_coeff,
+            random_coeff.clone(),
             num_polys,
         )?;
 
@@ -265,6 +264,7 @@ where
         let mut sumcheck_rounds = Vec::new();
         let mut folding_randomness: MultilinearPoint<F>;
         let initial_combination_randomness;
+
         if self.params.initial_statement {
             // Derive combination randomness and first sumcheck polynomial
             let [combination_randomness_gen]: [F; 1] = arthur.challenge_scalars()?;
@@ -446,6 +446,28 @@ where
         {
             return Err(ProofError::InvalidProof);
         }
+
+        let final_randomness_answers: Vec<_> = if self.params.n_rounds() == 0 {
+            final_randomness_answers
+                .into_iter()
+                .map(|raw_answer| {
+                    if batched_randomness.len() > 0 {
+                        let chunk_size = 1 << self.params.folding_factor;
+                        let mut res = vec![F::ZERO; chunk_size];
+                        for i in 0..chunk_size {
+                            for j in 0..num_polys {
+                                res[i] += raw_answer[i + j * chunk_size] * batched_randomness[j];
+                            }
+                        }
+                        res
+                    } else {
+                        raw_answer.clone()
+                    }
+                })
+                .collect()
+        } else {
+            final_randomness_answers.to_vec()
+        };
 
         if self.params.final_pow_bits > 0. {
             arthur.challenge_pow::<PowStrategy>(self.params.final_pow_bits)?;

@@ -24,7 +24,7 @@ where
     MerkleConfig: Config,
 {
     pub(crate) params: WhirConfig<F, MerkleConfig, PowStrategy>,
-    two_inv: F,
+    pub(crate) two_inv: F,
 }
 
 #[derive(Clone)]

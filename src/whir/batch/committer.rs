@@ -160,7 +160,7 @@ where
                         );
                         ood_answers[j] = eval;
                     }
-                });
+                });   
             merlin.add_scalars(&ood_answers)?;
         }
 

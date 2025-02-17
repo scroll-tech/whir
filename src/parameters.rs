@@ -119,12 +119,7 @@ impl FoldingFactor {
     pub fn check_validity(&self, num_variables: usize) -> Result<(), String> {
         match self {
             FoldingFactor::Constant(factor) => {
-                if *factor > num_variables {
-                    Err(format!(
-                        "Folding factor {} is greater than the number of variables {}. Polynomial too small, just send it directly.",
-                        factor, num_variables
-                    ))
-                } else if *factor == 0 {
+                if *factor == 0 {
                     // We should at least fold some time
                     Err(format!("Folding factor shouldn't be zero."))
                 } else {
@@ -132,17 +127,7 @@ impl FoldingFactor {
                 }
             }
             FoldingFactor::ConstantFromSecondRound(first_round_factor, factor) => {
-                if *first_round_factor > num_variables {
-                    Err(format!(
-                        "First round folding factor {} is greater than the number of variables {}. Polynomial too small, just send it directly.",
-                        first_round_factor, num_variables
-                    ))
-                } else if *factor > num_variables {
-                    Err(format!(
-                        "Folding factor {} is greater than the number of variables {}. Polynomial too small, just send it directly.",
-                        factor, num_variables
-                    ))
-                } else if *factor == 0 || *first_round_factor == 0 {
+                if *factor == 0 || *first_round_factor == 0 {
                     // We should at least fold some time
                     Err(format!("Folding factor shouldn't be zero."))
                 } else {

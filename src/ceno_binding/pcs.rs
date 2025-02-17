@@ -204,26 +204,23 @@ where
     E: FftField + Serialize + DeserializeOwned + Debug,
     E::BasePrimeField: Serialize + DeserializeOwned + Debug,
 {
-    type Param = WhirSetupParams<E>;
+    type Param = ();
     type Commitment = <MerkleConfigOf<Spec, E> as Config>::InnerDigest;
     type CommitmentWithWitness = CommitmentWithWitness<E, MerkleConfigOf<Spec, E>>;
     type Proof = WhirProofWrapper<MerkleConfigOf<Spec, E>, E>;
     type Poly = CoefficientList<E::BasePrimeField>;
 
-    fn setup(poly_size: usize) -> Self::Param {
-        WhirSetupParams {
-            num_variables: log2(poly_size) as usize,
-            _phantom: PhantomData,
-        }
+    fn setup(_poly_size: usize) -> Self::Param {
+        ()
     }
 
-    fn commit(pp: &Self::Param, poly: &Self::Poly) -> Result<Self::CommitmentWithWitness, Error> {
-        let params = Spec::prepare_whir_config(pp.num_variables);
+    fn commit(_pp: &Self::Param, poly: &Self::Poly) -> Result<Self::CommitmentWithWitness, Error> {
+        let params = Spec::prepare_whir_config(poly.num_variables());
 
         // The merlin here is just for satisfying the interface of
         // WHIR, which only provides a commit_and_write function.
         // It will be abandoned once this function finishes.
-        let io = Spec::prepare_io_pattern(pp.num_variables);
+        let io = Spec::prepare_io_pattern(poly.num_variables());
         let mut merlin = io.to_merlin();
 
         let committer = Committer::new(params);
@@ -240,7 +237,7 @@ where
     }
 
     fn batch_commit(
-        pp: &Self::Param,
+        _pp: &Self::Param,
         polys: &[Self::Poly],
     ) -> Result<Self::CommitmentWithWitness, Error> {
         if polys.is_empty() {
@@ -253,12 +250,12 @@ where
             }
         }
 
-        let params = Spec::prepare_whir_config(pp.num_variables);
+        let params = Spec::prepare_whir_config(polys[0].num_variables());
 
         // The merlin here is just for satisfying the interface of
         // WHIR, which only provides a commit_and_write function.
         // It will be abandoned once this function finishes.
-        let io = Spec::prepare_batch_io_pattern(pp.num_variables, polys.len());
+        let io = Spec::prepare_batch_io_pattern(polys[0].num_variables(), polys.len());
         let mut merlin = io.to_merlin();
 
         let committer = Committer::new(params);
@@ -271,13 +268,13 @@ where
     }
 
     fn open(
-        pp: &Self::Param,
+        _pp: &Self::Param,
         witness: &Self::CommitmentWithWitness,
         point: &[E],
         eval: &E,
     ) -> Result<Self::Proof, Error> {
-        let params = Spec::prepare_whir_config(pp.num_variables);
-        let io = Spec::prepare_io_pattern(pp.num_variables);
+        let params = Spec::prepare_whir_config(witness.witness.polys[0].num_variables());
+        let io = Spec::prepare_io_pattern(witness.witness.polys[0].num_variables());
         let mut merlin = io.to_merlin();
         // In WHIR, the prover writes the commitment to the transcript, then
         // the commitment is read from the transcript by the verifier, after
@@ -323,13 +320,14 @@ where
     }
 
     fn simple_batch_open(
-        pp: &Self::Param,
+        _pp: &Self::Param,
         witness: &Self::CommitmentWithWitness,
         point: &[E],
         evals: &[E],
     ) -> Result<Self::Proof, Error> {
-        let params = Spec::prepare_whir_config(pp.num_variables);
-        let io = Spec::prepare_batch_io_pattern(pp.num_variables, evals.len());
+        let params = Spec::prepare_whir_config(witness.witness.polys[0].num_variables());
+        let io =
+            Spec::prepare_batch_io_pattern(witness.witness.polys[0].num_variables(), evals.len());
         let mut merlin = io.to_merlin();
         // In WHIR, the prover writes the commitment to the transcript, then
         // the commitment is read from the transcript by the verifier, after
@@ -373,15 +371,15 @@ where
     }
 
     fn verify(
-        vp: &Self::Param,
+        _vp: &Self::Param,
         comm: &Self::Commitment,
         point: &[E],
         eval: &E,
         proof: &Self::Proof,
     ) -> Result<(), Error> {
-        let params = Spec::prepare_whir_config(vp.num_variables);
+        let params = Spec::prepare_whir_config(point.len());
         let verifier = Verifier::new(params);
-        let io = Spec::prepare_io_pattern(vp.num_variables);
+        let io = Spec::prepare_io_pattern(point.len());
         let mut arthur = io.to_arthur(&proof.transcript);
 
         let statement = Statement {
@@ -404,15 +402,15 @@ where
     }
 
     fn simple_batch_verify(
-        vp: &Self::Param,
+        _vp: &Self::Param,
         comm: &Self::Commitment,
         point: &[E],
         evals: &[E],
         proof: &Self::Proof,
     ) -> Result<(), Error> {
-        let params = Spec::prepare_whir_config(vp.num_variables);
+        let params = Spec::prepare_whir_config(point.len());
         let verifier = Verifier::new(params);
-        let io = Spec::prepare_batch_io_pattern(vp.num_variables, evals.len());
+        let io = Spec::prepare_batch_io_pattern(point.len(), evals.len());
         let mut arthur = io.to_arthur(&proof.transcript);
 
         let digest = Spec::MerkleConfigWrapper::verify_with_arthur_simple_batch(

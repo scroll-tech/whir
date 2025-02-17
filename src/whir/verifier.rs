@@ -467,7 +467,7 @@ where
         arthur: &mut Arthur,
         statement: &Statement<F>,
         whir_proof: &WhirProof<MerkleConfig, F>,
-    ) -> ProofResult<()>
+    ) -> ProofResult<MerkleConfig::InnerDigest>
     where
         Arthur: FieldChallenges<F> + FieldReader<F> + ByteChallenges + ByteReader + PoWChallenge + DigestReader<MerkleConfig>,
     {
@@ -602,6 +602,6 @@ where
             return Err(ProofError::InvalidProof);
         }
 
-        Ok(())
+        Ok(parsed_commitment.root)
     }
 }

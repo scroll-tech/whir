@@ -4,8 +4,8 @@ use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::FftField;
 use ark_poly::EvaluationDomain;
 use nimue::{
-    plugins::ark::{FieldChallenges, FieldReader}
-    , ByteChallenges, ByteReader, ProofError, ProofResult,
+    plugins::ark::{FieldChallenges, FieldReader},
+    ByteChallenges, ByteReader, ProofError, ProofResult,
 };
 use nimue_pow::{self, PoWChallenge};
 
@@ -106,7 +106,12 @@ where
         whir_proof: &WhirProof<MerkleConfig, F>,
     ) -> ProofResult<ParsedProof<F>>
     where
-        Arthur: FieldReader<F> + FieldChallenges<F> + PoWChallenge + ByteReader + ByteChallenges + DigestReader<MerkleConfig>,
+        Arthur: FieldReader<F>
+            + FieldChallenges<F>
+            + PoWChallenge
+            + ByteReader
+            + ByteChallenges
+            + DigestReader<MerkleConfig>,
     {
         let mut sumcheck_rounds = Vec::new();
         let mut folding_randomness: MultilinearPoint<F>;
@@ -325,17 +330,22 @@ where
                 .collect(),
         );
 
-        let statment_points: Vec<MultilinearPoint<F>> = statement.points.clone().into_iter().map(|mut p| {
-            while p.n_variables() < self.params.folding_factor {
-                p.0.insert(0, F::ONE);
-            }
-            p
-        }).collect();
+        let statement_points: Vec<MultilinearPoint<F>> = statement
+            .points
+            .clone()
+            .into_iter()
+            .map(|mut p| {
+                while p.n_variables() < self.params.folding_factor {
+                    p.0.insert(0, F::ONE);
+                }
+                p
+            })
+            .collect();
         let mut value = parsed_commitment
             .ood_points
             .iter()
             .map(|ood_point| MultilinearPoint::expand_from_univariate(*ood_point, num_variables))
-            .chain(statment_points)
+            .chain(statement_points)
             .zip(&proof.initial_combination_randomness)
             .map(|(point, randomness)| *randomness * eq_poly_outside(&point, &folding_randomness))
             .sum();
@@ -475,7 +485,12 @@ where
         whir_proof: &WhirProof<MerkleConfig, F>,
     ) -> ProofResult<MerkleConfig::InnerDigest>
     where
-        Arthur: FieldChallenges<F> + FieldReader<F> + ByteChallenges + ByteReader + PoWChallenge + DigestReader<MerkleConfig>,
+        Arthur: FieldChallenges<F>
+            + FieldReader<F>
+            + ByteChallenges
+            + ByteReader
+            + PoWChallenge
+            + DigestReader<MerkleConfig>,
     {
         // We first do a pass in which we rederive all the FS challenges
         // Then we will check the algebraic part (so to optimise inversions)

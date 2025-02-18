@@ -337,7 +337,7 @@ where
             .clone()
             .into_iter()
             .map(|mut p| {
-                while p.n_variables() < self.params.folding_factor {
+                while p.n_variables() < self.params.folding_factor.at_round(0) {
                     p.0.insert(0, F::ONE);
                 }
                 p

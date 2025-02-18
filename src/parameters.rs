@@ -116,7 +116,7 @@ impl FoldingFactor {
         }
     }
 
-    pub fn check_validity(&self, num_variables: usize) -> Result<(), String> {
+    pub fn check_validity(&self, _num_variables: usize) -> Result<(), String> {
         match self {
             FoldingFactor::Constant(factor) => {
                 if *factor == 0 {

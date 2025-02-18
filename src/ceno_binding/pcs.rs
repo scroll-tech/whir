@@ -2,7 +2,7 @@ use super::merkle_config::{Blake3ConfigWrapper, WhirMerkleConfigWrapper};
 use super::{Error, PolynomialCommitmentScheme};
 use crate::crypto::merkle_tree::blake3::{self as mt};
 use crate::parameters::{
-    default_max_pow, FoldType, MultivariateParameters, SoundnessType, WhirParameters,
+    default_max_pow, FoldType, FoldingFactor, MultivariateParameters, SoundnessType, WhirParameters,
 };
 use crate::poly_utils::{coeffs::CoefficientList, MultilinearPoint};
 use crate::whir::{
@@ -13,7 +13,6 @@ use crate::whir::{
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::log2;
 use nimue::plugins::ark::{FieldChallenges, FieldWriter};
 pub use nimue::DefaultHash;
 use nimue::IOPattern;
@@ -90,7 +89,7 @@ impl<E: FftField> WhirSpec<E> for WhirDefaultSpec {
             initial_statement: true,
             security_level: 100,
             pow_bits: default_max_pow(num_variables, 1),
-            folding_factor: 4,
+            folding_factor: FoldingFactor::ConstantFromSecondRound(1, 4),
             leaf_hash_params,
             two_to_one_params,
             soundness_type: SoundnessType::ConjectureList,

@@ -82,7 +82,7 @@ where
     {
         // If any evaluation point is shorter than the folding factor, pad with 0 in front
         for p in statement.points.iter_mut() {
-            while p.n_variables() < self.0.folding_factor {
+            while p.n_variables() < self.0.folding_factor.at_round(0) {
                 p.0.insert(0, F::ONE);
             }
         }

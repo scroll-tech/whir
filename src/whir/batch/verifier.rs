@@ -274,8 +274,8 @@ where
             );
 
             // Initial sumcheck
-            sumcheck_rounds.reserve_exact(self.params.folding_factor);
-            for _ in 0..self.params.folding_factor {
+            sumcheck_rounds.reserve_exact(self.params.folding_factor.at_round(0));
+            for _ in 0..self.params.folding_factor.at_round(0) {
                 let sumcheck_poly_evals: [F; 3] = arthur.next_scalars()?;
                 let sumcheck_poly = SumcheckPolynomial::new(sumcheck_poly_evals.to_vec(), 1);
                 let [folding_randomness_single] = arthur.challenge_scalars()?;
@@ -294,7 +294,7 @@ where
 
             initial_combination_randomness = vec![F::ONE];
 
-            let mut folding_randomness_vec = vec![F::ZERO; self.params.folding_factor];
+            let mut folding_randomness_vec = vec![F::ZERO; self.params.folding_factor.at_round(0)];
             arthur.fill_challenge_scalars(&mut folding_randomness_vec)?;
             folding_randomness = MultilinearPoint(folding_randomness_vec);
 
@@ -305,8 +305,8 @@ where
         };
 
         let mut prev_root = parsed_commitment.root.clone();
-        let domain_gen = self.params.starting_domain.backing_domain.group_gen();
-        let mut exp_domain_gen = domain_gen.pow([1 << self.params.folding_factor]);
+        let mut domain_gen = self.params.starting_domain.backing_domain.group_gen();
+        let mut exp_domain_gen = domain_gen.pow([1 << self.params.folding_factor.at_round(0)]);
         let mut domain_gen_inv = self.params.starting_domain.backing_domain.group_gen_inv();
         let mut domain_size = self.params.starting_domain.size();
         let mut rounds = vec![];
@@ -326,7 +326,7 @@ where
 
             let stir_challenges_indexes = get_challenge_stir_queries(
                 domain_size,
-                self.params.folding_factor,
+                self.params.folding_factor.at_round(r),
                 round_params.num_queries,
                 arthur,
             )?;
@@ -354,7 +354,7 @@ where
                     .into_iter()
                     .map(|raw_answer| {
                         if batched_randomness.len() > 0 {
-                            let chunk_size = 1 << self.params.folding_factor;
+                            let chunk_size = 1 << self.params.folding_factor.at_round(r);
                             let mut res = vec![F::ZERO; chunk_size];
                             for i in 0..chunk_size {
                                 for j in 0..num_polys {
@@ -382,8 +382,9 @@ where
                 stir_challenges_indexes.len() + round_params.ood_samples,
             );
 
-            let mut sumcheck_rounds = Vec::with_capacity(self.params.folding_factor);
-            for _ in 0..self.params.folding_factor {
+            let mut sumcheck_rounds =
+                Vec::with_capacity(self.params.folding_factor.at_round(r + 1));
+            for _ in 0..self.params.folding_factor.at_round(r + 1) {
                 let sumcheck_poly_evals: [F; 3] = arthur.next_scalars()?;
                 let sumcheck_poly = SumcheckPolynomial::new(sumcheck_poly_evals.to_vec(), 1);
                 let [folding_randomness_single] = arthur.challenge_scalars()?;
@@ -412,7 +413,8 @@ where
             folding_randomness = new_folding_randomness;
 
             prev_root = new_root.clone();
-            exp_domain_gen = exp_domain_gen * exp_domain_gen;
+            domain_gen = domain_gen * domain_gen;
+            exp_domain_gen = domain_gen.pow([1 << self.params.folding_factor.at_round(r + 1)]);
             domain_gen_inv = domain_gen_inv * domain_gen_inv;
             domain_size /= 2;
         }
@@ -424,7 +426,7 @@ where
         // Final queries verify
         let final_randomness_indexes = get_challenge_stir_queries(
             domain_size,
-            self.params.folding_factor,
+            self.params.folding_factor.at_round(self.params.n_rounds()),
             self.params.final_queries,
             arthur,
         )?;
@@ -452,7 +454,8 @@ where
                 .into_iter()
                 .map(|raw_answer| {
                     if batched_randomness.len() > 0 {
-                        let chunk_size = 1 << self.params.folding_factor;
+                        let chunk_size =
+                            1 << self.params.folding_factor.at_round(self.params.n_rounds());
                         let mut res = vec![F::ZERO; chunk_size];
                         for i in 0..chunk_size {
                             for j in 0..num_polys {
@@ -528,8 +531,8 @@ where
             .map(|(point, randomness)| *randomness * eq_poly_outside(&point, &folding_randomness))
             .sum();
 
-        for round_proof in &proof.rounds {
-            num_variables -= self.params.folding_factor;
+        for (round, round_proof) in proof.rounds.iter().enumerate() {
+            num_variables -= self.params.folding_factor.at_round(round);
             folding_randomness = MultilinearPoint(folding_randomness.0[..num_variables].to_vec());
 
             let ood_points = &round_proof.ood_points;

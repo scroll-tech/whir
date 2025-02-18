@@ -88,7 +88,7 @@ where
             .into_par_iter()
             .map(|evals| {
                 let sub_stack_evaluations_timer = start_timer!(|| "Sub Stack Evaluations");
-                let ret = utils::stack_evaluations(evals, self.0.folding_factor);
+                let ret = utils::stack_evaluations(evals, self.0.folding_factor.at_round(0));
                 end_timer!(sub_stack_evaluations_timer);
                 ret
             })
@@ -99,7 +99,7 @@ where
                     self.0.fold_optimisation,
                     base_domain.group_gen(),
                     base_domain.group_gen_inv(),
-                    self.0.folding_factor,
+                    self.0.folding_factor.at_round(0),
                 );
                 end_timer!(restructure_evaluations_timer);
                 ret
@@ -118,13 +118,13 @@ where
         let folded_evals = super::utils::horizontal_stacking(
             folded_evals,
             base_domain.size(),
-            self.0.folding_factor,
+            self.0.folding_factor.at_round(0),
             buffer.as_mut_slice(),
         );
         end_timer!(horizontal_stacking_timer);
 
         // Group folds together as a leaf.
-        let fold_size = 1 << self.0.folding_factor;
+        let fold_size = 1 << self.0.folding_factor.at_round(0);
         #[cfg(not(feature = "parallel"))]
         let leafs_iter = folded_evals.chunks_exact(fold_size * polys.len());
         #[cfg(feature = "parallel")]
@@ -160,7 +160,7 @@ where
                         );
                         ood_answers[j] = eval;
                     }
-                });   
+                });
             merlin.add_scalars(&ood_answers)?;
         }
 

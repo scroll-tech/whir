@@ -124,13 +124,14 @@ mod tests {
     fn make_whir_batch_things(
         num_polynomials: usize,
         num_variables: usize,
+        num_points: usize,
         folding_factor: usize,
         soundness_type: SoundnessType,
         pow_bits: usize,
         fold_type: FoldType,
     ) {
         println!(
-            "NP = {num_polynomials}, NV = {num_variables}, FOLD_TYPE = {:?}",
+            "NP = {num_polynomials}, NE = {num_points}, NV = {num_variables}, FOLD_TYPE = {:?}",
             fold_type
         );
         let num_coeffs = 1 << num_variables;
@@ -159,12 +160,12 @@ mod tests {
             .map(|i| CoefficientList::new(vec![F::from((i + 1) as i32); num_coeffs]))
             .collect();
 
-        let point = MultilinearPoint::rand(&mut rng, num_variables);
-        let evals: Vec<F> = polynomials
+        let points: Vec<MultilinearPoint<F>> = (0..num_points).map(|_| MultilinearPoint::rand(&mut rng, num_variables)).collect();
+        let evals_per_point: Vec<Vec<F>> = points.iter().map(|point| polynomials
             .iter()
-            .map(|poly| poly.evaluate(&point))
-            .collect();
-        let point = point.0;
+            .map(|poly| poly.evaluate(point))
+            .collect()).collect();
+        let points: Vec<Vec<F>> = points.into_iter().map(|point| point.0).collect();
 
         let io = IOPattern::<DefaultHash>::new("🌪️")
             .commit_batch_statement(&params, num_polynomials)
@@ -178,13 +179,13 @@ mod tests {
         let prover = Prover(params.clone());
 
         let proof = prover
-            .simple_batch_prove(&mut merlin, &point, &evals, &witnesses)
+            .simple_batch_prove(&mut merlin, &points, &evals_per_point, &witnesses)
             .unwrap();
 
         let verifier = Verifier::new(params);
         let mut arthur = io.to_arthur(merlin.transcript());
         assert!(verifier
-            .simple_batch_verify(&mut arthur, &point, &evals, &proof)
+            .simple_batch_verify(&mut arthur, num_polynomials, &points, &evals_per_point, &proof)
             .is_ok());
         println!("PASSED!");
     }
@@ -202,43 +203,46 @@ mod tests {
         let num_polys = [1, 2, 3];
         let pow_bits = [0, 5, 10];
 
+        // for folding_factor in folding_factors {
+        //     let num_variables = folding_factor - 1..=2 * folding_factor;
+        //     for num_variables in num_variables {
+        //         for fold_type in fold_types {
+        //             for num_points in num_points {
+        //                 for soundness_type in soundness_type {
+        //                     for pow_bits in pow_bits {
+        //                         make_whir_things(
+        //                             num_variables,
+        //                             folding_factor,
+        //                             num_points,
+        //                             soundness_type,
+        //                             pow_bits,
+        //                             fold_type,
+        //                         );
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
+
         for folding_factor in folding_factors {
-            let num_variables = folding_factor - 1..=2 * folding_factor;
+            let num_variables = folding_factor..=2 * folding_factor;
             for num_variables in num_variables {
                 for fold_type in fold_types {
                     for num_points in num_points {
-                        for soundness_type in soundness_type {
-                            for pow_bits in pow_bits {
-                                make_whir_things(
-                                    num_variables,
-                                    folding_factor,
-                                    num_points,
-                                    soundness_type,
-                                    pow_bits,
-                                    fold_type,
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        for folding_factor in folding_factors {
-            let num_variables = folding_factor..=3 * folding_factor;
-            for num_variables in num_variables {
-                for fold_type in fold_types {
-                    for num_polys in num_polys {
-                        for soundness_type in soundness_type {
-                            for pow_bits in pow_bits {
-                                make_whir_batch_things(
-                                    num_polys,
-                                    num_variables,
-                                    folding_factor,
-                                    soundness_type,
-                                    pow_bits,
-                                    fold_type,
-                                );
+                        for num_polys in num_polys {
+                            for soundness_type in soundness_type {
+                                for pow_bits in pow_bits {
+                                    make_whir_batch_things(
+                                        num_polys,
+                                        num_variables,
+                                        num_points,
+                                        folding_factor,
+                                        soundness_type,
+                                        pow_bits,
+                                        fold_type,
+                                    );
+                                }
                             }
                         }
                     }

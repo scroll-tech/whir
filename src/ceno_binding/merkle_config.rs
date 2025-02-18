@@ -127,7 +127,8 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for Blake3ConfigWrapper<F> {
         evals: &[F],
         witness: &Witnesses<F, Self::MerkleConfig>,
     ) -> ProofResult<WhirProof<Self::MerkleConfig, F>> {
-        prover.simple_batch_prove(merlin, point, evals, witness)
+        panic!("batched opening not supported!")
+        // prover.simple_batch_prove(merlin, point, evals, witness)
     }
 
     fn verify_with_arthur(
@@ -146,7 +147,8 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for Blake3ConfigWrapper<F> {
         evals: &[F],
         whir_proof: &WhirProof<Self::MerkleConfig, F>,
     ) -> ProofResult<<Self::MerkleConfig as Config>::InnerDigest> {
-        verifier.simple_batch_verify(arthur, point, evals, whir_proof)
+        panic!("batched opening not supported!")
+        // verifier.simple_batch_verify(arthur, point, evals, whir_proof)
     }
 
     fn commit_statement_to_io_pattern(
@@ -222,7 +224,8 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for KeccakConfigWrapper<F> {
         evals: &[F],
         witness: &Witnesses<F, Self::MerkleConfig>,
     ) -> ProofResult<WhirProof<Self::MerkleConfig, F>> {
-        prover.simple_batch_prove(merlin, point, evals, witness)
+        panic!("batched opening not supported!")
+        // prover.simple_batch_prove(merlin, point, evals, witness)
     }
 
     fn verify_with_arthur(
@@ -241,7 +244,8 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for KeccakConfigWrapper<F> {
         evals: &[F],
         whir_proof: &WhirProof<Self::MerkleConfig, F>,
     ) -> ProofResult<<Self::MerkleConfig as Config>::InnerDigest> {
-        verifier.simple_batch_verify(arthur, point, evals, whir_proof)
+        panic!("batched opening not supported!")
+        // verifier.simple_batch_verify(arthur, point, evals, whir_proof)
     }
 
     fn commit_statement_to_io_pattern(

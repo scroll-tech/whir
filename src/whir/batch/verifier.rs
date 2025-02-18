@@ -30,8 +30,9 @@ where
     pub fn simple_batch_verify<Arthur>(
         &self,
         arthur: &mut Arthur,
-        point: &[F],
-        evals: &[F],
+        num_polys: usize,
+        points: &Vec<Vec<F>>,
+        evals_per_point: &Vec<Vec<F>>,
         whir_proof: &WhirProof<MerkleConfig, F>,
     ) -> ProofResult<MerkleConfig::InnerDigest>
     where
@@ -42,7 +43,9 @@ where
             + PoWChallenge
             + DigestReader<MerkleConfig>,
     {
-        let num_polys = evals.len();
+        for evals in evals_per_point {
+            assert_eq!(num_polys, evals.len());
+        }
 
         // We first do a pass in which we rederive all the FS challenges
         // Then we will check the algebraic part (so to optimise inversions)
@@ -63,7 +66,7 @@ where
                     self.params.mv_parameters.num_variables,
                 )
             })
-            .chain(std::iter::once(MultilinearPoint(point.to_vec())))
+            .chain(points.iter().map(|p| MultilinearPoint(p.to_vec())))
             .collect();
 
         let ood_answers = parsed_commitment
@@ -72,11 +75,11 @@ where
             .chunks_exact(num_polys)
             .map(|answer| compute_dot_product(answer, &random_coeff))
             .collect::<Vec<_>>();
-        let eval = compute_dot_product(evals, &random_coeff);
+        let eval_per_point: Vec<F> = evals_per_point.iter().map(|evals| compute_dot_product(evals, &random_coeff)).collect();
 
         let initial_answers: Vec<_> = ood_answers
             .into_iter()
-            .chain(std::iter::once(eval))
+            .chain(eval_per_point)
             .collect();
 
         let statement = Statement {

@@ -52,12 +52,12 @@ where
         witness.polys[0].num_variables() == self.0.mv_parameters.num_variables
     }
 
-    /// batch open a single point for multiple polys
+    /// batch open the same points for multiple polys
     pub fn simple_batch_prove<Merlin>(
         &self,
         merlin: &mut Merlin,
-        point: &[F],
-        evals: &[F],
+        points: &Vec<Vec<F>>,
+        evals_per_point: &Vec<Vec<F>>, // outer loop on each point, inner loop on each poly
         witness: &Witnesses<F, MerkleConfig>,
     ) -> ProofResult<WhirProof<MerkleConfig, F>>
     where
@@ -73,17 +73,21 @@ where
         assert!(self.0.initial_statement, "must be true for pcs");
         assert!(self.validate_parameters());
         assert!(self.validate_witnesses(&witness));
-        assert_eq!(
-            point.len(),
-            self.0.mv_parameters.num_variables,
-            "number of variables mismatch"
-        );
+        for point in points {
+            assert_eq!(
+                point.len(),
+                self.0.mv_parameters.num_variables,
+                "number of variables mismatch"
+            );
+        }
         let num_polys = witness.polys.len();
-        assert_eq!(
-            evals.len(),
-            num_polys,
-            "number of polynomials not equal number of evaluations"
-        );
+        for evals in evals_per_point {
+            assert_eq!(
+                evals.len(),
+                num_polys,
+                "number of polynomials not equal number of evaluations"
+            );
+        }
 
         let compute_dot_product =
             |evals: &[F], coeff: &[F]| -> F { zip_eq(evals, coeff).map(|(a, b)| *a * *b).sum() };
@@ -104,8 +108,7 @@ where
                     self.0.mv_parameters.num_variables,
                 )
             })
-            .chain(rayon::iter::once(MultilinearPoint(point.to_vec())))
-            .collect();
+            .chain(points.par_iter().map(|p| MultilinearPoint(p.to_vec()))).collect();
         end_timer!(initial_claims_timer);
 
         let ood_answers_timer = start_timer!(|| "ood answers");
@@ -117,13 +120,13 @@ where
         end_timer!(ood_answers_timer);
 
         let eval_timer = start_timer!(|| "eval");
-        let eval = compute_dot_product(evals, &random_coeff);
+        let eval_per_point: Vec<F> = evals_per_point.par_iter().map(|evals| compute_dot_product(evals, &random_coeff)).collect();
         end_timer!(eval_timer);
 
         let combine_timer = start_timer!(|| "Combine polynomial");
         let initial_answers: Vec<_> = ood_answers
             .into_iter()
-            .chain(std::iter::once(eval))
+            .chain(eval_per_point)
             .collect();
 
         let polynomial = CoefficientList::combine(&witness.polys, &random_coeff);

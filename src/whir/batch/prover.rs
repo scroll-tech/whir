@@ -420,7 +420,7 @@ where
         let folding_randomness = sumcheck_prover
             .compute_sumcheck_polynomials::<PowStrategy, Merlin>(
                 merlin,
-                self.0.folding_factor.at_round(round_state.round),
+                self.0.folding_factor.at_round(round_state.round + 1),
                 round_params.folding_pow_bits,
             )?;
 

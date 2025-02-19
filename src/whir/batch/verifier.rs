@@ -465,7 +465,13 @@ where
         )?;
         let final_randomness_points = final_randomness_indexes
             .iter()
-            .map(|index| exp_domain_gen.pow([*index as u64]))
+            .map(|index| {
+                Self::pow_with_precomputed_squares(
+                    &domain_gen_powers.as_slice()[log_based_on_domain_gen
+                        + self.params.folding_factor.at_round(self.params.n_rounds())..],
+                    *index,
+                )
+            })
             .collect();
 
         let (final_merkle_proof, final_randomness_answers) = &whir_proof.0[whir_proof.0.len() - 1];

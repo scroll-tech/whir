@@ -88,7 +88,7 @@ where
                     params.folding_factor.at_round(round + 1),
                     r.folding_pow_bits,
                 );
-            domain_size /= 2;
+            domain_size >>= 1;
         }
 
         let folded_domain_size = domain_size

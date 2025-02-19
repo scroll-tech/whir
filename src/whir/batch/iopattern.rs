@@ -16,6 +16,11 @@ pub trait WhirBatchIOPattern<F: FftField, MerkleConfig: Config> {
         params: &WhirConfig<F, MerkleConfig, PowStrategy>,
         batch_size: usize,
     ) -> Self;
+    fn add_whir_unify_proof<PowStrategy>(
+        self,
+        params: &WhirConfig<F, MerkleConfig, PowStrategy>,
+        batch_size: usize,
+    ) -> Self;
     fn add_whir_batch_proof<PowStrategy>(
         self,
         params: &WhirConfig<F, MerkleConfig, PowStrategy>,
@@ -48,6 +53,20 @@ where
                 .add_scalars(params.committment_ood_samples * batch_size, "ood_ans");
         }
         this
+    }
+
+    fn add_whir_unify_proof<PowStrategy>(
+        mut self,
+        params: &WhirConfig<F, MerkleConfig, PowStrategy>,
+        batch_size: usize,
+    ) -> Self {
+        if batch_size > 1 {
+            self = self.challenge_scalars(1, "batch_poly_combination_randomness");
+        }
+        self = self
+            // .challenge_scalars(1, "initial_combination_randomness")
+            .add_sumcheck(params.mv_parameters.num_variables, 0.);
+        self.add_scalars(batch_size, "unified_folded_evals")
     }
 
     fn add_whir_batch_proof<PowStrategy>(

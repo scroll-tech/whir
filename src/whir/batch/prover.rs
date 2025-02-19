@@ -28,6 +28,17 @@ use crate::whir::fs_utils::{get_challenge_stir_queries, DigestWriter};
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
+struct RoundStateBatch<'a, F, MerkleConfig>
+where
+    F: FftField,
+    MerkleConfig: Config,
+{
+    round_state: RoundState<F, MerkleConfig>,
+    batching_randomness: Vec<F>,
+    prev_merkle: &'a MerkleTree<MerkleConfig>,
+    prev_merkle_answers: &'a Vec<F>,
+}
+
 impl<F, MerkleConfig, PowStrategy> Prover<F, MerkleConfig, PowStrategy>
 where
     F: FftField,
@@ -434,13 +445,20 @@ where
 
         self.round(merlin, round_state)
     }
+}
 
+impl<F, MerkleConfig, PowStrategy> Prover<F, MerkleConfig, PowStrategy>
+where
+    F: FftField,
+    MerkleConfig: Config<Leaf = [F]>,
+    PowStrategy: nimue_pow::PowStrategy,
+{
     /// each poly on a different point, same size
     pub fn same_size_batch_prove<Merlin>(
         &self,
         merlin: &mut Merlin,
         point_per_poly: &Vec<MultilinearPoint<F>>,
-        eval_per_poly: &Vec<F>, // per poly
+        eval_per_poly: &Vec<F>,
         witness: &Witnesses<F, MerkleConfig>,
     ) -> ProofResult<WhirProof<MerkleConfig, F>>
     where
@@ -469,9 +487,6 @@ where
             num_polys,
             "number of polynomials not equal number of evaluations"
         );
-
-        let compute_dot_product =
-            |evals: &[F], coeff: &[F]| -> F { zip_eq(evals, coeff).map(|(a, b)| *a * *b).sum() };
         end_timer!(initial_timer);
 
         let poly_comb_randomness_timer = start_timer!(|| "poly comb randomness");
@@ -480,93 +495,44 @@ where
         end_timer!(poly_comb_randomness_timer);
 
         let initial_claims_timer = start_timer!(|| "initial claims");
-        let initial_ood_claims: Vec<_> = witness
-            .ood_points
-            .par_iter()
-            .map(|ood_point| {
-                MultilinearPoint::expand_from_univariate(
-                    *ood_point,
-                    self.0.mv_parameters.num_variables,
-                )
-            }).collect();
         let initial_eval_claims = point_per_poly.clone();
-        let num_points = initial_ood_claims.len() + 1; // ood_points + eval_points(1)
         end_timer!(initial_claims_timer);
 
-        let ood_answers_timer = start_timer!(|| "ood answers");
-        let ood_answers = witness
-            .ood_answers
-            .par_chunks_exact(witness.polys.len())
-            .map(|answer| answer.to_vec())
-            .collect::<Vec<Vec<_>>>();
-        end_timer!(ood_answers_timer);
+        // let comb_timer = start_timer!(|| "combination randomness");
+        // let num_points = 1; // do not process ood points
+        // let [point_comb_randomness_gen] = merlin.challenge_scalars()?;
+        // let point_comb_randomness = expand_randomness(point_comb_randomness_gen, num_points);
+        // end_timer!(comb_timer);
 
-        let comb_timer = start_timer!(|| "combination randomness");
-        let [point_comb_randomness_gen] = merlin.challenge_scalars()?;
-        let point_comb_randomness =
-            expand_randomness(point_comb_randomness_gen, num_points);
-        end_timer!(comb_timer);
-
-        let sumcheck_timer = start_timer!(|| "sumcheck");
-        let mut sumcheck_prover = Some(SumcheckProverNotSkippingBatched::new(
+        let sumcheck_timer = start_timer!(|| "unifying sumcheck");
+        let mut sumcheck_prover = SumcheckProverNotSkippingBatched::new(
             witness.polys.clone(),
-            &initial_ood_claims,
+            &Vec::new(),
             &initial_eval_claims,
-            &point_comb_randomness,
+            &vec![F::from(1)],
             &poly_comb_randomness,
-            &ood_answers,
+            &Vec::new(),
             &eval_per_poly,
-        ));
-        end_timer!(sumcheck_timer);
+        );
 
-        let sumcheck_prover_timer = start_timer!(|| "sumcheck_prover");
-        let folding_randomness = sumcheck_prover
-            .as_mut()
-            .unwrap()
+        // Perform the entire sumcheck
+        let folded_point = sumcheck_prover
             .compute_sumcheck_polynomials::<PowStrategy, Merlin>(
                 merlin,
-                self.0.folding_factor,
-                self.0.starting_folding_pow_bits,
+                self.0.mv_parameters.num_variables,
+                0.,
             )?;
-        end_timer!(sumcheck_prover_timer);
+        let folded_evals = sumcheck_prover.get_folded_polys();
+        merlin.add_scalars(&folded_evals)?;
+        // Problem now reduced to the polys(folded_point) =?= folded_evals
+        end_timer!(sumcheck_timer);
 
-        let timer = start_timer!(|| "round_batch");
-        let round_state = RoundStateBatch {
-            round_state: RoundState {
-                domain: self.0.starting_domain.clone(),
-                round: 0,
-                sumcheck_prover,
-                folding_randomness,
-                coefficients: polynomial,
-                prev_merkle: MerkleTree::blank(
-                    &self.0.leaf_hash_params,
-                    &self.0.two_to_one_params,
-                    2,
-                )
-                .unwrap(),
-                prev_merkle_answers: Vec::new(),
-                merkle_proofs: vec![],
-            },
-            prev_merkle: &witness.merkle_tree,
-            prev_merkle_answers: &witness.merkle_leaves,
-            batching_randomness: random_coeff,
-        };
-
-        let result = self.round_batch(merlin, round_state, num_polys);
+        let timer = start_timer!(|| "simple_batch");
+        // perform simple_batch on folded_point and folded_evals
+        let result = self.simple_batch_prove(merlin, &vec![folded_point], &vec![folded_evals], witness)?;
         end_timer!(timer);
         end_timer!(prove_timer);
 
-        result
+        Ok(result)
     }
-}
-
-struct RoundStateBatch<'a, F, MerkleConfig>
-where
-    F: FftField,
-    MerkleConfig: Config,
-{
-    round_state: RoundState<F, MerkleConfig>,
-    batching_randomness: Vec<F>,
-    prev_merkle: &'a MerkleTree<MerkleConfig>,
-    prev_merkle_answers: &'a Vec<F>,
 }

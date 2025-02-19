@@ -56,6 +56,20 @@ where
         prover
     }
 
+    pub fn get_folded_polys(&self) -> Vec<F> {
+        self.evaluations_of_p.iter().map(|e| {
+            assert_eq!(e.num_variables(), 0);
+            e.evals()[0]
+        }).collect()
+    }
+
+    pub fn get_folded_eqs(&self) -> Vec<F> {
+        self.evaluations_of_equality.iter().map(|e| {
+            assert_eq!(e.num_variables(), 0);
+            e.evals()[0]
+        }).collect()
+    }
+
     #[cfg(not(feature = "parallel"))]
     pub fn compute_sumcheck_polynomial(&self) -> SumcheckPolynomial<F> {
         panic!("Non-parallel version not supported!");

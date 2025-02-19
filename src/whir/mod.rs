@@ -272,52 +272,52 @@ mod tests {
         let num_polys = [1, 2, 3];
         let pow_bits = [0, 5, 10];
 
-        // for folding_factor in folding_factors {
-        //     let num_variables = folding_factor - 1..=2 * folding_factor;
-        //     for num_variables in num_variables {
-        //         for fold_type in fold_types {
-        //             for num_points in num_points {
-        //                 for soundness_type in soundness_type {
-        //                     for pow_bits in pow_bits {
-        //                         make_whir_things(
-        //                             num_variables,
-        //                             folding_factor,
-        //                             num_points,
-        //                             soundness_type,
-        //                             pow_bits,
-        //                             fold_type,
-        //                         );
-        //                     }
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
+        for folding_factor in folding_factors {
+            let num_variables = folding_factor - 1..=2 * folding_factor;
+            for num_variables in num_variables {
+                for fold_type in fold_types {
+                    for num_points in num_points {
+                        for soundness_type in soundness_type {
+                            for pow_bits in pow_bits {
+                                make_whir_things(
+                                    num_variables,
+                                    folding_factor,
+                                    num_points,
+                                    soundness_type,
+                                    pow_bits,
+                                    fold_type,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
-        // for folding_factor in folding_factors {
-        //     let num_variables = folding_factor..=2 * folding_factor;
-        //     for num_variables in num_variables {
-        //         for fold_type in fold_types {
-        //             for num_points in num_points {
-        //                 for num_polys in num_polys {
-        //                     for soundness_type in soundness_type {
-        //                         for pow_bits in pow_bits {
-        //                             make_whir_batch_things_same_point(
-        //                                 num_polys,
-        //                                 num_variables,
-        //                                 num_points,
-        //                                 folding_factor,
-        //                                 soundness_type,
-        //                                 pow_bits,
-        //                                 fold_type,
-        //                             );
-        //                         }
-        //                     }
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
+        for folding_factor in folding_factors {
+            let num_variables = folding_factor..=2 * folding_factor;
+            for num_variables in num_variables {
+                for fold_type in fold_types {
+                    for num_points in num_points {
+                        for num_polys in num_polys {
+                            for soundness_type in soundness_type {
+                                for pow_bits in pow_bits {
+                                    make_whir_batch_things_same_point(
+                                        num_polys,
+                                        num_variables,
+                                        num_points,
+                                        folding_factor,
+                                        soundness_type,
+                                        pow_bits,
+                                        fold_type,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         for folding_factor in folding_factors {
             let num_variables = folding_factor..=2 * folding_factor;

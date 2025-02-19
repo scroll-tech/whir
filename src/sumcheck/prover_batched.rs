@@ -20,27 +20,19 @@ where
 {
     // Input includes the following:
     // coeffs: coefficient of a list of polynomials p
-    // seq_points: points that will be evaluated on every polynomial (OOD points)
-    // par_points: one point per poly (eval points)
+    // points: one point per poly
     // and initialises the table of the initial polynomial
-    // v(X_1, ..., X_n) = comb_coeff0 * p0(X_1, ... X_n) * (epsilon_1 eq_z_1(X) + epsilon_2 eq_z_2(X) ...) + comb_coeff1 * p1(..) * eq1(..) + ...
+    // v(X_1, ..., X_n) = p0(..) * eq0(..) + p1(..) * eq1(..) + ...
     pub fn new(
         coeffs: Vec<CoefficientList<F>>,
-        seq_points: &[MultilinearPoint<F>],
-        par_points: &[MultilinearPoint<F>],
-        point_comb_coeff: &[F], // random coefficients for combining each point
+        points: &[MultilinearPoint<F>],
         poly_comb_coeff: &[F], // random coefficients for combining each poly
-        seq_evals_per_point: &[Vec<F>],
-        par_evals: &[F],
+        evals: &[F],
     ) -> Self {
         let num_polys = coeffs.len();
-        assert_eq!(point_comb_coeff.len(), seq_points.len() + 1); // 1 for par_points
         assert_eq!(poly_comb_coeff.len(), num_polys);
-        assert_eq!(par_points.len(), num_polys);
-        for seq_evals in seq_evals_per_point {
-            assert_eq!(seq_evals.len(), num_polys);
-        }
-        assert_eq!(par_evals.len(), num_polys);
+        assert_eq!(points.len(), num_polys);
+        assert_eq!(evals.len(), num_polys);
         let num_variables = coeffs[0].num_variables();
 
         let mut prover = SumcheckBatched {
@@ -52,7 +44,7 @@ where
             sum: F::ZERO,
         };
 
-        prover.add_new_equality(seq_points, par_points, point_comb_coeff, poly_comb_coeff, seq_evals_per_point, par_evals);
+        prover.add_new_equality(points, poly_comb_coeff, evals);
         prover
     }
 
@@ -143,31 +135,16 @@ where
 
     pub fn add_new_equality(
         &mut self,
-        seq_points: &[MultilinearPoint<F>],
-        par_points: &[MultilinearPoint<F>],
-        point_comb_coeff: &[F],
+        points: &[MultilinearPoint<F>],
         poly_comb_coeff: &[F],
-        seq_evals_per_point: &[Vec<F>],
-        par_evals: &[F],
+        evals: &[F],
     ) {
-        assert_eq!(seq_points.len(), seq_evals_per_point.len());
-        assert_eq!(par_points.len(), par_evals.len());
-        // OOD points
-        // TODO: optimize the processes below: EQs of every SEQ_POINTS should only be computed once!
-        for (i, (point, seq_point_coeff)) in seq_points.iter().zip(point_comb_coeff).enumerate() {
-            for evals in &mut self.evaluations_of_equality {
-                SumcheckSingle::eval_eq(&point.0, evals.evals_mut(), *seq_point_coeff);
-            }
-            for j in 0..self.num_polys {
-                self.sum += poly_comb_coeff[j] * seq_evals_per_point[i][j] * seq_point_coeff;
-            }
-        }
+        assert_eq!(points.len(), evals.len());
         
         // Eval points
-        let par_point_coeff = point_comb_coeff[seq_points.len()];
-        for (i, point) in par_points.iter().enumerate() {
-            SumcheckSingle::eval_eq(&point.0, self.evaluations_of_equality[i].evals_mut(), par_point_coeff);
-            self.sum += poly_comb_coeff[i] * par_evals[i] * par_point_coeff;
+        for (i, point) in points.iter().enumerate() {
+            SumcheckSingle::eval_eq(&point.0, self.evaluations_of_equality[i].evals_mut(), F::from(1));
+            self.sum += poly_comb_coeff[i] * evals[i];
         }
     }
 
@@ -258,10 +235,6 @@ mod tests {
     #[test]
     fn test_sumcheck_folding_factor_1() {
         let num_rounds = 2;
-        let ood_points = vec![
-            MultilinearPoint(vec![F::from(4574), F::from(6839)]),
-            MultilinearPoint(vec![F::from(9283), F::from(4792)]),
-        ];
         let eval_points = vec![
             MultilinearPoint(vec![F::from(10), F::from(11)]),
             MultilinearPoint(vec![F::from(7), F::from(8)]),
@@ -270,43 +243,23 @@ mod tests {
             CoefficientList::new(vec![F::from(1), F::from(5), F::from(10), F::from(14)]),
             CoefficientList::new(vec![F::from(2), F::from(6), F::from(11), F::from(13)]),
         ];
-        let point_comb_coeffs = vec![F::from(4), F::from(5), F::from(6)];
         let poly_comb_coeffs = vec![F::from(2), F::from(3)];
 
-        let seq_evals: Vec<Vec<F>> = ood_points.iter().map(|point|
-            polynomials.iter().map(|poly|
-                poly.evaluate(point)
-            ).collect()
-        ).collect();
-        let par_evals: Vec<F> = polynomials.iter().zip(&eval_points).map(|(poly, point)| 
+        let evals: Vec<F> = polynomials.iter().zip(&eval_points).map(|(poly, point)| 
             poly.evaluate(point)
         ).collect();
-        let mut claimed_value: F = seq_evals
-            .iter()
-            .zip(&point_comb_coeffs)
-            .fold(F::from(0), |sum, (evals, point_rand)|
-                evals
-                .iter()
-                .zip(&poly_comb_coeffs)
-                .fold(F::from(0), |sum, (eval, poly_rand)| 
-                    eval * poly_rand + sum
-                ) * point_rand + sum
-            ) 
-        + par_evals
+        let mut claimed_value: F = evals
             .iter()
             .zip(&poly_comb_coeffs)
             .fold(F::from(0), |sum, (eval, poly_rand)| 
                 eval * poly_rand + sum
-            ) * point_comb_coeffs[ood_points.len()];
+            );
         
         let mut prover = SumcheckBatched::new(
             polynomials.clone(), 
-            &ood_points,
             &eval_points, 
-            &point_comb_coeffs,
             &poly_comb_coeffs,
-            &seq_evals,
-            &par_evals,
+            &evals,
         );
         let mut comb_randomness_list = Vec::new();
         let mut fold_randomness_list = Vec::new();

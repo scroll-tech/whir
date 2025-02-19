@@ -498,20 +498,11 @@ where
         let initial_eval_claims = point_per_poly.clone();
         end_timer!(initial_claims_timer);
 
-        // let comb_timer = start_timer!(|| "combination randomness");
-        // let num_points = 1; // do not process ood points
-        // let [point_comb_randomness_gen] = merlin.challenge_scalars()?;
-        // let point_comb_randomness = expand_randomness(point_comb_randomness_gen, num_points);
-        // end_timer!(comb_timer);
-
         let sumcheck_timer = start_timer!(|| "unifying sumcheck");
         let mut sumcheck_prover = SumcheckProverNotSkippingBatched::new(
             witness.polys.clone(),
-            &Vec::new(),
             &initial_eval_claims,
-            &vec![F::from(1)],
             &poly_comb_randomness,
-            &Vec::new(),
             &eval_per_poly,
         );
 

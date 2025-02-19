@@ -19,22 +19,16 @@ where
     // v(X_1, ..., X_n) = p(X_1, ... X_n) * (epsilon_1 eq_z_1(X) + epsilon_2 eq_z_2(X) ...)
     pub fn new(
         coeffs: Vec<CoefficientList<F>>,
-        seq_points: &[MultilinearPoint<F>],
-        par_points: &[MultilinearPoint<F>],
-        point_comb_coeff: &[F], // random coefficients for combining each point
+        points: &[MultilinearPoint<F>],
         poly_comb_coeff: &[F], // random coefficients for combining each poly
-        seq_evals_per_point: &[Vec<F>],
-        par_evals: &[F],
+        evals: &[F],
     ) -> Self {
         Self {
             sumcheck_prover: SumcheckBatched::new(
                 coeffs,
-                seq_points,
-                par_points,
-                point_comb_coeff,
+                points,
                 poly_comb_coeff,
-                seq_evals_per_point,
-                par_evals,
+                evals,
             ),
         }
     }
@@ -103,14 +97,11 @@ mod tests {
         ];
 
         // Initial stuff
-        let ood_point = MultilinearPoint::expand_from_univariate(F::from(42), num_variables);
         let statement_points = vec![
             MultilinearPoint::expand_from_univariate(F::from(97), num_variables),
             MultilinearPoint::expand_from_univariate(F::from(75), num_variables),
         ];
 
-        // Point randomness
-        let [epsilon_1, epsilon_2] = [F::from(15), F::from(32)];
         // Poly randomness
         let [alpha_1, alpha_2] = [F::from(15), F::from(32)];
 
@@ -132,14 +123,8 @@ mod tests {
         let mut merlin = iopattern.to_merlin();
         let mut prover = SumcheckProverNotSkippingBatched::new(
             polynomials.clone(),
-            &[ood_point.clone()],
             &statement_points,
-            &[epsilon_1, epsilon_2],
             &[alpha_1, alpha_2],
-            &[vec![
-                polynomials[0].evaluate_at_extension(&ood_point),
-                polynomials[1].evaluate_at_extension(&ood_point),
-            ]],
             &[
                 polynomials[0].evaluate_at_extension(&statement_points[0]),
                 polynomials[1].evaluate_at_extension(&statement_points[1]),
@@ -152,7 +137,6 @@ mod tests {
         // Compute the answers
         let folded_polys_1: Vec<_> = polynomials.iter().map(|poly| poly.fold(&folding_randomness_1)).collect();
 
-        let ood_answers: Vec<F> = polynomials.iter().map(|poly| poly.evaluate(&ood_point)).collect();
         let statement_answers: Vec<F> = polynomials.iter().zip(&statement_points).map(|(poly, point)|
             poly.evaluate(point)
         ).collect();
@@ -168,10 +152,8 @@ mod tests {
 
         assert_eq!(
             sumcheck_poly_11.sum_over_hypercube(),
-            epsilon_1 * alpha_1 * ood_answers[0] + 
-            epsilon_1 * alpha_2 * ood_answers[1] + 
-            epsilon_2 * alpha_1 * statement_answers[0] +
-            epsilon_2 * alpha_2 * statement_answers[1]
+            alpha_1 * statement_answers[0] +
+            alpha_2 * statement_answers[1]
         );
 
         assert_eq!(
@@ -185,11 +167,9 @@ mod tests {
         assert_eq!(
             sumcheck_poly_12.evaluate_at_point(&folding_randomness_12.into()),
             eval_coeff[0] * alpha_1
-                * (epsilon_1 * eq_poly_outside(&full_folding, &ood_point)
-                    + epsilon_2 * eq_poly_outside(&full_folding, &statement_points[0]))
+                * eq_poly_outside(&full_folding, &statement_points[0])
             + eval_coeff[1] * alpha_2
-                * (epsilon_1 * eq_poly_outside(&full_folding, &ood_point)
-                    + epsilon_2 * eq_poly_outside(&full_folding, &statement_points[1]))
+                * eq_poly_outside(&full_folding, &statement_points[1])
         );
 
         Ok(())

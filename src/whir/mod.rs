@@ -165,7 +165,6 @@ mod tests {
             .iter()
             .map(|poly| poly.evaluate(point))
             .collect()).collect();
-        let points: Vec<Vec<F>> = points.into_iter().map(|point| point.0).collect();
 
         let io = IOPattern::<DefaultHash>::new("🌪️")
             .commit_batch_statement(&params, num_polynomials)

@@ -1,4 +1,5 @@
 use super::committer::Witnesses;
+use crate::sumcheck::prover_not_skipping_batched::SumcheckProverNotSkippingBatched;
 use crate::whir::prover::RoundState;
 use crate::whir::{prover::Prover, WhirProof};
 use crate::{
@@ -56,7 +57,7 @@ where
     pub fn simple_batch_prove<Merlin>(
         &self,
         merlin: &mut Merlin,
-        points: &Vec<Vec<F>>,
+        points: &Vec<MultilinearPoint<F>>,
         evals_per_point: &Vec<Vec<F>>, // outer loop on each point, inner loop on each poly
         witness: &Witnesses<F, MerkleConfig>,
     ) -> ProofResult<WhirProof<MerkleConfig, F>>
@@ -75,7 +76,7 @@ where
         assert!(self.validate_witnesses(&witness));
         for point in points {
             assert_eq!(
-                point.len(),
+                point.0.len(),
                 self.0.mv_parameters.num_variables,
                 "number of variables mismatch"
             );
@@ -108,7 +109,7 @@ where
                     self.0.mv_parameters.num_variables,
                 )
             })
-            .chain(points.par_iter().map(|p| MultilinearPoint(p.to_vec()))).collect();
+            .chain(points.clone()).collect();
         end_timer!(initial_claims_timer);
 
         let ood_answers_timer = start_timer!(|| "ood answers");
@@ -180,14 +181,14 @@ where
             batching_randomness: random_coeff,
         };
 
-        let result = self.round_batch(merlin, round_state, num_polys);
+        let result = self.simple_round_batch(merlin, round_state, num_polys);
         end_timer!(timer);
         end_timer!(prove_timer);
 
         result
     }
 
-    fn round_batch<Merlin>(
+    fn simple_round_batch<Merlin>(
         &self,
         merlin: &mut Merlin,
         round_state: RoundStateBatch<F, MerkleConfig>,
@@ -432,6 +433,130 @@ where
         };
 
         self.round(merlin, round_state)
+    }
+
+    /// each poly on a different point, same size
+    pub fn same_size_batch_prove<Merlin>(
+        &self,
+        merlin: &mut Merlin,
+        point_per_poly: &Vec<MultilinearPoint<F>>,
+        eval_per_poly: &Vec<F>, // per poly
+        witness: &Witnesses<F, MerkleConfig>,
+    ) -> ProofResult<WhirProof<MerkleConfig, F>>
+    where
+        Merlin: FieldChallenges<F>
+            + FieldWriter<F>
+            + ByteChallenges
+            + ByteWriter
+            + PoWChallenge
+            + DigestWriter<MerkleConfig>,
+    {
+        let prove_timer = start_timer!(|| "prove");
+        let initial_timer = start_timer!(|| "init");
+        assert!(self.0.initial_statement, "must be true for pcs");
+        assert!(self.validate_parameters());
+        assert!(self.validate_witnesses(&witness));
+        for point in point_per_poly {
+            assert_eq!(
+                point.0.len(),
+                self.0.mv_parameters.num_variables,
+                "number of variables mismatch"
+            );
+        }
+        let num_polys = witness.polys.len();
+        assert_eq!(
+            eval_per_poly.len(),
+            num_polys,
+            "number of polynomials not equal number of evaluations"
+        );
+
+        let compute_dot_product =
+            |evals: &[F], coeff: &[F]| -> F { zip_eq(evals, coeff).map(|(a, b)| *a * *b).sum() };
+        end_timer!(initial_timer);
+
+        let poly_comb_randomness_timer = start_timer!(|| "poly comb randomness");
+        let poly_comb_randomness =
+            super::utils::generate_random_vector_batch_open(merlin, witness.polys.len())?;
+        end_timer!(poly_comb_randomness_timer);
+
+        let initial_claims_timer = start_timer!(|| "initial claims");
+        let initial_ood_claims: Vec<_> = witness
+            .ood_points
+            .par_iter()
+            .map(|ood_point| {
+                MultilinearPoint::expand_from_univariate(
+                    *ood_point,
+                    self.0.mv_parameters.num_variables,
+                )
+            }).collect();
+        let initial_eval_claims = point_per_poly.clone();
+        let num_points = initial_ood_claims.len() + 1; // ood_points + eval_points(1)
+        end_timer!(initial_claims_timer);
+
+        let ood_answers_timer = start_timer!(|| "ood answers");
+        let ood_answers = witness
+            .ood_answers
+            .par_chunks_exact(witness.polys.len())
+            .map(|answer| answer.to_vec())
+            .collect::<Vec<Vec<_>>>();
+        end_timer!(ood_answers_timer);
+
+        let comb_timer = start_timer!(|| "combination randomness");
+        let [point_comb_randomness_gen] = merlin.challenge_scalars()?;
+        let point_comb_randomness =
+            expand_randomness(point_comb_randomness_gen, num_points);
+        end_timer!(comb_timer);
+
+        let sumcheck_timer = start_timer!(|| "sumcheck");
+        let mut sumcheck_prover = Some(SumcheckProverNotSkippingBatched::new(
+            witness.polys.clone(),
+            &initial_ood_claims,
+            &initial_eval_claims,
+            &point_comb_randomness,
+            &poly_comb_randomness,
+            &ood_answers,
+            &eval_per_poly,
+        ));
+        end_timer!(sumcheck_timer);
+
+        let sumcheck_prover_timer = start_timer!(|| "sumcheck_prover");
+        let folding_randomness = sumcheck_prover
+            .as_mut()
+            .unwrap()
+            .compute_sumcheck_polynomials::<PowStrategy, Merlin>(
+                merlin,
+                self.0.folding_factor,
+                self.0.starting_folding_pow_bits,
+            )?;
+        end_timer!(sumcheck_prover_timer);
+
+        let timer = start_timer!(|| "round_batch");
+        let round_state = RoundStateBatch {
+            round_state: RoundState {
+                domain: self.0.starting_domain.clone(),
+                round: 0,
+                sumcheck_prover,
+                folding_randomness,
+                coefficients: polynomial,
+                prev_merkle: MerkleTree::blank(
+                    &self.0.leaf_hash_params,
+                    &self.0.two_to_one_params,
+                    2,
+                )
+                .unwrap(),
+                prev_merkle_answers: Vec::new(),
+                merkle_proofs: vec![],
+            },
+            prev_merkle: &witness.merkle_tree,
+            prev_merkle_answers: &witness.merkle_leaves,
+            batching_randomness: random_coeff,
+        };
+
+        let result = self.round_batch(merlin, round_state, num_polys);
+        end_timer!(timer);
+        end_timer!(prove_timer);
+
+        result
     }
 }
 

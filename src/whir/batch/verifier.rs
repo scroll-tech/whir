@@ -31,7 +31,7 @@ where
         &self,
         arthur: &mut Arthur,
         num_polys: usize,
-        points: &Vec<Vec<F>>,
+        points: &Vec<MultilinearPoint<F>>,
         evals_per_point: &Vec<Vec<F>>,
         whir_proof: &WhirProof<MerkleConfig, F>,
     ) -> ProofResult<MerkleConfig::InnerDigest>
@@ -66,7 +66,7 @@ where
                     self.params.mv_parameters.num_variables,
                 )
             })
-            .chain(points.iter().map(|p| MultilinearPoint(p.to_vec())))
+            .chain(points.clone())
             .collect();
 
         let ood_answers = parsed_commitment

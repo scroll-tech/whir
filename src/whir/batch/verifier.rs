@@ -2,7 +2,7 @@ use std::iter;
 
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::FftField;
-use ark_poly::{domain, EvaluationDomain};
+use ark_poly::EvaluationDomain;
 use ark_std::log2;
 use itertools::zip_eq;
 use nimue::{

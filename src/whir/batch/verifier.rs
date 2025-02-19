@@ -2,7 +2,8 @@ use std::iter;
 
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::FftField;
-use ark_poly::EvaluationDomain;
+use ark_poly::{domain, EvaluationDomain};
+use ark_std::log2;
 use itertools::zip_eq;
 use nimue::{
     plugins::ark::{FieldChallenges, FieldReader},
@@ -244,6 +245,19 @@ where
         })
     }
 
+    fn pow_with_precomputed_squares(squares: &[F], mut index: usize) -> F {
+        let mut result = F::one();
+        let mut i = 0;
+        while index > 0 {
+            if index & 1 == 1 {
+                result *= squares[i];
+            }
+            index >>= 1;
+            i += 1;
+        }
+        result
+    }
+
     fn parse_proof_batch<Arthur>(
         &self,
         arthur: &mut Arthur,
@@ -306,7 +320,17 @@ where
 
         let mut prev_root = parsed_commitment.root.clone();
         let mut domain_gen = self.params.starting_domain.backing_domain.group_gen();
-        let mut exp_domain_gen = domain_gen.pow([1 << self.params.folding_factor.at_round(0)]);
+        // Precompute the powers of the domain generator, so that
+        // we can always compute domain_gen.pow(1 << i) by exp_domain_gen_powers[i]
+        let domain_gen_powers = std::iter::successors(Some(domain_gen), |&curr| Some(curr * curr))
+            .take(log2(self.params.starting_domain.size()) as usize)
+            .collect::<Vec<_>>();
+        // Since domain_gen will be repeatedly squared in the future, keep
+        // track of the log of the power (i.e., how many times it has been squared
+        // from the domain_gen).
+        // In another word, always ensure domain_gen = domain_gen_powers[log_based_on_domain_gen]
+        let mut log_based_on_domain_gen: usize = 0;
+        let mut exp_domain_gen = domain_gen_powers[self.params.folding_factor.at_round(0)];
         let mut domain_gen_inv = self.params.starting_domain.backing_domain.group_gen_inv();
         let mut domain_size = self.params.starting_domain.size();
         let mut rounds = vec![];
@@ -333,7 +357,13 @@ where
 
             let stir_challenges_points = stir_challenges_indexes
                 .iter()
-                .map(|index| exp_domain_gen.pow([*index as u64]))
+                .map(|index| {
+                    Self::pow_with_precomputed_squares(
+                        &domain_gen_powers.as_slice()
+                            [log_based_on_domain_gen + self.params.folding_factor.at_round(r)..],
+                        *index,
+                    )
+                })
                 .collect();
 
             if !merkle_proof
@@ -413,8 +443,11 @@ where
             folding_randomness = new_folding_randomness;
 
             prev_root = new_root.clone();
-            domain_gen = domain_gen * domain_gen;
-            exp_domain_gen = domain_gen.pow([1 << self.params.folding_factor.at_round(r + 1)]);
+            log_based_on_domain_gen += 1;
+            // Equivalent to domain_gen = domain_gen * domain_gen
+            domain_gen = domain_gen_powers[log_based_on_domain_gen];
+            exp_domain_gen = domain_gen_powers
+                [log_based_on_domain_gen + self.params.folding_factor.at_round(r + 1)];
             domain_gen_inv = domain_gen_inv * domain_gen_inv;
             domain_size /= 2;
         }

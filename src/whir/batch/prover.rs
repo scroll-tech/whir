@@ -68,8 +68,8 @@ where
     pub fn simple_batch_prove<Merlin>(
         &self,
         merlin: &mut Merlin,
-        points: &Vec<MultilinearPoint<F>>,
-        evals_per_point: &Vec<Vec<F>>, // outer loop on each point, inner loop on each poly
+        points: &[MultilinearPoint<F>],
+        evals_per_point: &[Vec<F>], // outer loop on each point, inner loop on each poly
         witness: &Witnesses<F, MerkleConfig>,
     ) -> ProofResult<WhirProof<MerkleConfig, F>>
     where
@@ -120,7 +120,7 @@ where
                     self.0.mv_parameters.num_variables,
                 )
             })
-            .chain(points.clone()).collect();
+            .chain(points.to_vec()).collect();
         end_timer!(initial_claims_timer);
 
         let ood_answers_timer = start_timer!(|| "ood answers");

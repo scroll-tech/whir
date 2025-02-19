@@ -6,6 +6,7 @@ use nimue_pow::PowStrategy;
 use crate::crypto::merkle_tree::blake3::MerkleTreeParams as Blake3Params;
 use crate::crypto::merkle_tree::keccak::MerkleTreeParams as KeccakParams;
 use crate::poly_utils::coeffs::CoefficientList;
+use crate::poly_utils::MultilinearPoint;
 use crate::whir::batch::{WhirBatchIOPattern, Witnesses};
 use crate::whir::committer::{Committer, Witness};
 use crate::whir::fs_utils::DigestWriter;
@@ -127,8 +128,8 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for Blake3ConfigWrapper<F> {
         evals: &[F],
         witness: &Witnesses<F, Self::MerkleConfig>,
     ) -> ProofResult<WhirProof<Self::MerkleConfig, F>> {
-        panic!("batched opening not supported!")
-        // prover.simple_batch_prove(merlin, point, evals, witness)
+        let points = [MultilinearPoint(point.to_vec())];
+        prover.simple_batch_prove(merlin, &points, &[evals.to_vec()], witness)
     }
 
     fn verify_with_arthur(
@@ -147,8 +148,8 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for Blake3ConfigWrapper<F> {
         evals: &[F],
         whir_proof: &WhirProof<Self::MerkleConfig, F>,
     ) -> ProofResult<<Self::MerkleConfig as Config>::InnerDigest> {
-        panic!("batched opening not supported!")
-        // verifier.simple_batch_verify(arthur, point, evals, whir_proof)
+        let points = [MultilinearPoint(point.to_vec())];
+        verifier.simple_batch_verify(arthur, evals.len(), &points, &[evals.to_vec()], whir_proof)
     }
 
     fn commit_statement_to_io_pattern(
@@ -224,8 +225,8 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for KeccakConfigWrapper<F> {
         evals: &[F],
         witness: &Witnesses<F, Self::MerkleConfig>,
     ) -> ProofResult<WhirProof<Self::MerkleConfig, F>> {
-        panic!("batched opening not supported!")
-        // prover.simple_batch_prove(merlin, point, evals, witness)
+        let points = [MultilinearPoint(point.to_vec())];
+        prover.simple_batch_prove(merlin, &points, &[evals.to_vec()], witness)
     }
 
     fn verify_with_arthur(
@@ -244,8 +245,8 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for KeccakConfigWrapper<F> {
         evals: &[F],
         whir_proof: &WhirProof<Self::MerkleConfig, F>,
     ) -> ProofResult<<Self::MerkleConfig as Config>::InnerDigest> {
-        panic!("batched opening not supported!")
-        // verifier.simple_batch_verify(arthur, point, evals, whir_proof)
+        let points = [MultilinearPoint(point.to_vec())];
+        verifier.simple_batch_verify(arthur, evals.len(), &points, &[evals.to_vec()], whir_proof)
     }
 
     fn commit_statement_to_io_pattern(

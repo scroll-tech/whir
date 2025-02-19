@@ -32,8 +32,8 @@ where
         &self,
         arthur: &mut Arthur,
         num_polys: usize,
-        points: &Vec<MultilinearPoint<F>>,
-        evals_per_point: &Vec<Vec<F>>,
+        points: &[MultilinearPoint<F>],
+        evals_per_point: &[Vec<F>],
         whir_proof: &WhirProof<MerkleConfig, F>,
     ) -> ProofResult<MerkleConfig::InnerDigest>
     where
@@ -89,8 +89,8 @@ where
         &self,
         arthur: &mut Arthur,
         num_polys: usize,
-        points: &Vec<MultilinearPoint<F>>,
-        evals_per_point: &Vec<Vec<F>>,
+        points: &[MultilinearPoint<F>],
+        evals_per_point: &[Vec<F>],
         parsed_commitment: ParsedCommitment<F, MerkleConfig::InnerDigest>,
         whir_proof: &WhirProof<MerkleConfig, F>,
     ) -> ProofResult<MerkleConfig::InnerDigest>
@@ -117,7 +117,7 @@ where
                     self.params.mv_parameters.num_variables,
                 )
             })
-            .chain(points.clone())
+            .chain(points.to_vec())
             .collect();
 
         let ood_answers = parsed_commitment

@@ -6,6 +6,18 @@
 # 3. Query: number of queries per round, multiplied by the respective cost to the prover and the verifier
 
 from math import log, ceil
+# Soundness types
+CONJECTURE_LIST = 0
+PROVABLE_LIST = 1
+UNIQUE_DECODING = 2
+
+# --
+# INPUTS
+poly_num_vars = [27, 26, 25, 24, 23, 22]
+folding_factor = 4
+soundness_type = CONJECTURE_LIST
+pow_bits = 0
+# --
 
 class SumcheckData:
   def __init__(self, num_vars_list, num_rounds):
@@ -63,12 +75,6 @@ class RawCost:
       total_query_depth += q.num_queries * ceil(log(q.folded_domain_size, 2))
     print("TOTAL QUERY SIZE: ", total_query_depth)
 
-
-# Soundness types
-CONJECTURE_LIST = 0
-PROVABLE_LIST = 1
-UNIQUE_DECODING = 2
-
 # Compute number of queries
 def get_num_queries(soundness_type, pow_bits, domain_size, num_vars):
   security_level = max(0, 32 - pow_bits)
@@ -89,12 +95,13 @@ def compute_no_batch(soundness_type, pow_bits, poly_num_vars, folding_factor):
   query_data_list = []
   for num_var in poly_num_vars:
     domain_size = 2 * (2 ** num_var)
+    domain_size_list.append(domain_size)
     while num_var >= folding_factor:
-      domain_size_list.append(domain_size)
       fold_sumcheck_data_list.append(SumcheckData([num_var], folding_factor))
       query_data_list.append(QueryData(get_num_queries(soundness_type, pow_bits, domain_size, num_var), domain_size // (2 ** folding_factor)))
       num_var -= folding_factor
       domain_size //= 2
+      domain_size_list.append(domain_size)
   return RawCost(folding_factor, domain_size_list, [], fold_sumcheck_data_list, query_data_list)
 
 def compute_optimal(soundness_type, pow_bits, poly_num_vars, folding_factor):
@@ -104,12 +111,13 @@ def compute_optimal(soundness_type, pow_bits, poly_num_vars, folding_factor):
   # Assume poly_num_vars is sorted
   num_var = poly_num_vars[0]
   domain_size = 2 * (2 ** num_var)
+  domain_size_list.append(domain_size)
   while num_var >= folding_factor:
-    domain_size_list.append(domain_size)
     fold_sumcheck_data_list.append(SumcheckData([num_var], folding_factor))
     query_data_list.append(QueryData(get_num_queries(soundness_type, pow_bits, domain_size, num_var), domain_size // (2 ** folding_factor)))
     num_var -= folding_factor
     domain_size //= 2
+    domain_size_list.append(domain_size)
   return RawCost(folding_factor, domain_size_list, [], fold_sumcheck_data_list, query_data_list)
 
 def compute_batch_no_pad(soundness_type, pow_bits, poly_num_vars, folding_factor):
@@ -142,7 +150,7 @@ def compute_batch_pad_threshold(soundness_type, pow_bits, poly_num_vars, folding
 
 def compute_batch(soundness_type, pow_bits, poly_num_vars, folding_factor, poly_domain_size):
   # Do not perform any padding, batch in each polynomial when its their turn
-  domain_size_list = []
+  domain_size_list = poly_domain_size[:] # every polynomial is first encoded as merkle tree
   unify_sumcheck_data_list = []
   fold_sumcheck_data_list = []
   query_data_list = []
@@ -173,18 +181,13 @@ def compute_batch(soundness_type, pow_bits, poly_num_vars, folding_factor, poly_
     num_var = poly_num_vars[0]
     domain_size = poly_domain_size[0]
     assert(num_var >= folding_factor)
-    domain_size_list.append(domain_size)
     fold_sumcheck_data_list.append(SumcheckData([num_var], folding_factor))
     query_data_list.append(QueryData(get_num_queries(soundness_type, pow_bits, domain_size, num_var), domain_size // (2 ** folding_factor)))
     poly_num_vars[0] -= folding_factor
     poly_domain_size[0] //= 2
+    domain_size_list.append(poly_domain_size[0])
 
   return RawCost(folding_factor, domain_size_list, unify_sumcheck_data_list, fold_sumcheck_data_list, query_data_list)
-
-poly_num_vars = [27, 26, 25, 24, 23, 22]
-folding_factor = 4
-soundness_type = CONJECTURE_LIST
-pow_bits = 0
 
 # Sort the polynomials from large to small
 poly_num_vars.sort(reverse=True)

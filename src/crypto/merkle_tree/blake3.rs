@@ -12,6 +12,7 @@ use ark_ff::Field;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use nimue::{Arthur, ByteIOPattern, ByteReader, ByteWriter, IOPattern, Merlin, ProofError, ProofResult};
 use rand::RngCore;
+use serde::{Deserialize, Serialize};
 
 #[derive(
     Debug, Default, Clone, Copy, Eq, PartialEq, Hash, CanonicalSerialize, CanonicalDeserialize,
@@ -106,7 +107,7 @@ impl TwoToOneCRHScheme for Blake3TwoToOneCRHScheme {
 pub type LeafH<F> = Blake3LeafHash<F>;
 pub type CompressH = Blake3TwoToOneCRHScheme;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct MerkleTreeParams<F>(PhantomData<F>);
 
 impl<F: CanonicalSerialize + Send> Config for MerkleTreeParams<F> {
@@ -138,13 +139,13 @@ impl<F: Field> DigestIOPattern<MerkleTreeParams<F>> for IOPattern {
     }
 }
 
-impl<F: Field> DigestWriter<MerkleTreeParams<F>> for Merlin {
+impl <F: Field> DigestWriter<MerkleTreeParams<F>> for Merlin {
     fn add_digest(&mut self, digest: Blake3Digest) -> ProofResult<()> {
         self.add_bytes(&digest.0).map_err(ProofError::InvalidIO)
     }
 }
 
-impl <'a, F: Field> DigestReader<MerkleTreeParams<F>> for Arthur<'a> {
+impl<'a, F: Field> DigestReader<MerkleTreeParams<F>> for Arthur<'a> {
     fn read_digest(&mut self) -> ProofResult<Blake3Digest> {
         let mut digest = [0; 32];
         self.fill_next_bytes(&mut digest)?;

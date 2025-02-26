@@ -1,7 +1,9 @@
 pub mod proof;
 pub mod prover_core;
 pub mod prover_not_skipping;
+pub mod prover_not_skipping_batched;
 pub mod prover_single;
+pub mod prover_batched;
 
 #[cfg(test)]
 mod tests {

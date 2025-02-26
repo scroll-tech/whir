@@ -1,4 +1,5 @@
 use super::committer::Witnesses;
+use crate::sumcheck::prover_not_skipping_batched::SumcheckProverNotSkippingBatched;
 use crate::whir::prover::RoundState;
 use crate::whir::{prover::Prover, WhirProof};
 use crate::{
@@ -27,6 +28,17 @@ use crate::whir::fs_utils::{get_challenge_stir_queries, DigestWriter};
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
+struct RoundStateBatch<'a, F, MerkleConfig>
+where
+    F: FftField,
+    MerkleConfig: Config,
+{
+    round_state: RoundState<F, MerkleConfig>,
+    batching_randomness: Vec<F>,
+    prev_merkle: &'a MerkleTree<MerkleConfig>,
+    prev_merkle_answers: &'a Vec<F>,
+}
+
 impl<F, MerkleConfig, PowStrategy> Prover<F, MerkleConfig, PowStrategy>
 where
     F: FftField,
@@ -52,12 +64,12 @@ where
         witness.polys[0].num_variables() == self.0.mv_parameters.num_variables
     }
 
-    /// batch open a single point for multiple polys
+    /// batch open the same points for multiple polys
     pub fn simple_batch_prove<Merlin>(
         &self,
         merlin: &mut Merlin,
-        point: &[F],
-        evals: &[F],
+        points: &[MultilinearPoint<F>],
+        evals_per_point: &[Vec<F>], // outer loop on each point, inner loop on each poly
         witness: &Witnesses<F, MerkleConfig>,
     ) -> ProofResult<WhirProof<MerkleConfig, F>>
     where
@@ -73,17 +85,21 @@ where
         assert!(self.0.initial_statement, "must be true for pcs");
         assert!(self.validate_parameters());
         assert!(self.validate_witnesses(&witness));
-        assert_eq!(
-            point.len(),
-            self.0.mv_parameters.num_variables,
-            "number of variables mismatch"
-        );
+        for point in points {
+            assert_eq!(
+                point.0.len(),
+                self.0.mv_parameters.num_variables,
+                "number of variables mismatch"
+            );
+        }
         let num_polys = witness.polys.len();
-        assert_eq!(
-            evals.len(),
-            num_polys,
-            "number of polynomials not equal number of evaluations"
-        );
+        for evals in evals_per_point {
+            assert_eq!(
+                evals.len(),
+                num_polys,
+                "number of polynomials not equal number of evaluations"
+            );
+        }
 
         let compute_dot_product =
             |evals: &[F], coeff: &[F]| -> F { zip_eq(evals, coeff).map(|(a, b)| *a * *b).sum() };
@@ -104,8 +120,7 @@ where
                     self.0.mv_parameters.num_variables,
                 )
             })
-            .chain(rayon::iter::once(MultilinearPoint(point.to_vec())))
-            .collect();
+            .chain(points.to_vec()).collect();
         end_timer!(initial_claims_timer);
 
         let ood_answers_timer = start_timer!(|| "ood answers");
@@ -117,13 +132,13 @@ where
         end_timer!(ood_answers_timer);
 
         let eval_timer = start_timer!(|| "eval");
-        let eval = compute_dot_product(evals, &random_coeff);
+        let eval_per_point: Vec<F> = evals_per_point.par_iter().map(|evals| compute_dot_product(evals, &random_coeff)).collect();
         end_timer!(eval_timer);
 
         let combine_timer = start_timer!(|| "Combine polynomial");
         let initial_answers: Vec<_> = ood_answers
             .into_iter()
-            .chain(std::iter::once(eval))
+            .chain(eval_per_point)
             .collect();
 
         let polynomial = CoefficientList::combine(&witness.polys, &random_coeff);
@@ -177,14 +192,14 @@ where
             batching_randomness: random_coeff,
         };
 
-        let result = self.round_batch(merlin, round_state, num_polys);
+        let result = self.simple_round_batch(merlin, round_state, num_polys);
         end_timer!(timer);
         end_timer!(prove_timer);
 
         result
     }
 
-    fn round_batch<Merlin>(
+    fn simple_round_batch<Merlin>(
         &self,
         merlin: &mut Merlin,
         round_state: RoundStateBatch<F, MerkleConfig>,
@@ -439,13 +454,83 @@ where
     }
 }
 
-struct RoundStateBatch<'a, F, MerkleConfig>
+impl<F, MerkleConfig, PowStrategy> Prover<F, MerkleConfig, PowStrategy>
 where
     F: FftField,
-    MerkleConfig: Config,
+    MerkleConfig: Config<Leaf = [F]>,
+    PowStrategy: nimue_pow::PowStrategy,
 {
-    round_state: RoundState<F, MerkleConfig>,
-    batching_randomness: Vec<F>,
-    prev_merkle: &'a MerkleTree<MerkleConfig>,
-    prev_merkle_answers: &'a Vec<F>,
+    /// each poly on a different point, same size
+    pub fn same_size_batch_prove<Merlin>(
+        &self,
+        merlin: &mut Merlin,
+        point_per_poly: &Vec<MultilinearPoint<F>>,
+        eval_per_poly: &Vec<F>,
+        witness: &Witnesses<F, MerkleConfig>,
+    ) -> ProofResult<WhirProof<MerkleConfig, F>>
+    where
+        Merlin: FieldChallenges<F>
+            + FieldWriter<F>
+            + ByteChallenges
+            + ByteWriter
+            + PoWChallenge
+            + DigestWriter<MerkleConfig>,
+    {
+        let prove_timer = start_timer!(|| "prove");
+        let initial_timer = start_timer!(|| "init");
+        assert!(self.0.initial_statement, "must be true for pcs");
+        assert!(self.validate_parameters());
+        assert!(self.validate_witnesses(&witness));
+        for point in point_per_poly {
+            assert_eq!(
+                point.0.len(),
+                self.0.mv_parameters.num_variables,
+                "number of variables mismatch"
+            );
+        }
+        let num_polys = witness.polys.len();
+        assert_eq!(
+            eval_per_poly.len(),
+            num_polys,
+            "number of polynomials not equal number of evaluations"
+        );
+        end_timer!(initial_timer);
+
+        let poly_comb_randomness_timer = start_timer!(|| "poly comb randomness");
+        let poly_comb_randomness =
+            super::utils::generate_random_vector_batch_open(merlin, witness.polys.len())?;
+        end_timer!(poly_comb_randomness_timer);
+
+        let initial_claims_timer = start_timer!(|| "initial claims");
+        let initial_eval_claims = point_per_poly.clone();
+        end_timer!(initial_claims_timer);
+
+        let sumcheck_timer = start_timer!(|| "unifying sumcheck");
+        let mut sumcheck_prover = SumcheckProverNotSkippingBatched::new(
+            witness.polys.clone(),
+            &initial_eval_claims,
+            &poly_comb_randomness,
+            &eval_per_poly,
+        );
+
+        // Perform the entire sumcheck
+        let folded_point = sumcheck_prover
+            .compute_sumcheck_polynomials::<PowStrategy, Merlin>(
+                merlin,
+                self.0.mv_parameters.num_variables,
+                0.,
+            )?;
+        let folded_evals = sumcheck_prover.get_folded_polys();
+        merlin.add_scalars(&folded_evals)?;
+        end_timer!(sumcheck_timer);
+        // Problem now reduced to the polys(folded_point) =?= folded_evals
+
+        let timer = start_timer!(|| "simple_batch");
+        // perform simple_batch on folded_point and folded_evals
+        let result = self.simple_batch_prove(merlin, &vec![folded_point], &vec![folded_evals], witness)?;
+        end_timer!(timer);
+        end_timer!(prove_timer);
+
+        Ok(result)
+    }
 }

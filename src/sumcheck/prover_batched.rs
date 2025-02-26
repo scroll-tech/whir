@@ -44,7 +44,11 @@ where
             sum: F::ZERO,
         };
 
-        prover.add_new_equality(points, poly_comb_coeff, evals);
+        // Eval points
+        for (i, point) in points.iter().enumerate() {
+            SumcheckSingle::eval_eq(&point.0, prover.evaluations_of_equality[i].evals_mut(), F::from(1));
+            prover.sum += poly_comb_coeff[i] * evals[i];
+        }
         prover
     }
 
@@ -131,21 +135,6 @@ where
         let eval_2 = eval_1 + c1 + c2 + c2.double();
 
         SumcheckPolynomial::new(vec![eval_0, eval_1, eval_2], 1)
-    }
-
-    pub fn add_new_equality(
-        &mut self,
-        points: &[MultilinearPoint<F>],
-        poly_comb_coeff: &[F],
-        evals: &[F],
-    ) {
-        assert_eq!(points.len(), evals.len());
-        
-        // Eval points
-        for (i, point) in points.iter().enumerate() {
-            SumcheckSingle::eval_eq(&point.0, self.evaluations_of_equality[i].evals_mut(), F::from(1));
-            self.sum += poly_comb_coeff[i] * evals[i];
-        }
     }
 
     // When the folding randomness arrives, compress the table accordingly (adding the new points)

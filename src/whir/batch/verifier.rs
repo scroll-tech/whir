@@ -51,7 +51,7 @@ where
         // We first do a pass in which we rederive all the FS challenges
         // Then we will check the algebraic part (so to optimise inversions)
         let parsed_commitment = self.parse_commitment_batch(arthur, num_polys)?;
-        self.batch_verify(arthur, num_polys, points, evals_per_point, parsed_commitment, whir_proof)
+        self.batch_verify_internal(arthur, num_polys, points, evals_per_point, parsed_commitment, whir_proof)
     }
 
     // Different points on each polynomial
@@ -82,10 +82,10 @@ where
         let poly_comb_randomness = super::utils::generate_random_vector_batch_verify(arthur, num_polys)?;
         let (folded_points, folded_evals) = self.parse_unify_sumcheck(arthur, point_per_poly, poly_comb_randomness)?;
 
-        self.batch_verify(arthur, num_polys, &vec![folded_points], &vec![folded_evals.clone()], parsed_commitment, whir_proof)
+        self.batch_verify_internal(arthur, num_polys, &vec![folded_points], &vec![folded_evals.clone()], parsed_commitment, whir_proof)
     }
 
-    fn batch_verify<Arthur>(
+    fn batch_verify_internal<Arthur>(
         &self,
         arthur: &mut Arthur,
         num_polys: usize,
@@ -126,7 +126,7 @@ where
             .chunks_exact(num_polys)
             .map(|answer| compute_dot_product(answer, &random_coeff))
             .collect::<Vec<_>>();
-        let eval_per_point: Vec<F> = evals_per_point.iter().map(|evals| compute_dot_product(evals, &random_coeff)).collect();
+        let eval_per_point = evals_per_point.iter().map(|evals| compute_dot_product(evals, &random_coeff));
 
         let initial_answers: Vec<_> = ood_answers
             .into_iter()

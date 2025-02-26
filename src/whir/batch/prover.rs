@@ -515,8 +515,8 @@ where
             )?;
         let folded_evals = sumcheck_prover.get_folded_polys();
         merlin.add_scalars(&folded_evals)?;
-        // Problem now reduced to the polys(folded_point) =?= folded_evals
         end_timer!(sumcheck_timer);
+        // Problem now reduced to the polys(folded_point) =?= folded_evals
 
         let timer = start_timer!(|| "simple_batch");
         // perform simple_batch on folded_point and folded_evals

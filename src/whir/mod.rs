@@ -147,7 +147,7 @@ mod tests {
             initial_statement: true,
             security_level: 32,
             pow_bits,
-            folding_factor,
+            folding_factor: FoldingFactor::Constant(folding_factor),
             leaf_hash_params,
             two_to_one_params,
             soundness_type,

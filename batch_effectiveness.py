@@ -6,6 +6,7 @@
 # 3. Query: number of queries per round, multiplied by the respective cost to the prover and the verifier
 
 from math import log, ceil
+from collections import Counter
 # Soundness types
 CONJECTURE_LIST = 0
 PROVABLE_LIST = 1
@@ -19,9 +20,33 @@ soundness_type = CONJECTURE_LIST
 pow_bits = 0
 # --
 
+def print_bytes(num_bytes):
+  suffix = "bytes"
+  if num_bytes > 1000:
+    num_bytes /= 1000
+    suffix = "KB"
+  if num_bytes > 1000:
+    num_bytes /= 1000
+    suffix = "MB"
+  if num_bytes > 1000:
+    num_bytes /= 1000
+    suffix = "GB"
+  if num_bytes > 1000:
+    num_bytes /= 1000
+    suffix = "TB"
+  return f"{num_bytes:.3f} {suffix}"
+
+class MerkleData:
+  def __init__(self, domain_size, num_polys, folding_factor, is_starting_poly):
+    assert(is_starting_poly or num_polys == 1)  # sanity check
+    self.domain_size = domain_size
+    self.num_polys = num_polys  # number of polynomials packed into this merkle tree
+    self.folding_factor = folding_factor
+    self.is_starting_poly = is_starting_poly  # if is_starting_poly, leafs cost 8 bytes instead of 16
+
 class SumcheckData:
   def __init__(self, num_vars_list, num_rounds):
-    self.num_vars_list = num_vars_list # num of vars of all the polynomials involved in the sumcheck
+    self.num_vars_list = num_vars_list  # num of vars of all the polynomials involved in the sumcheck
     self.num_rounds = num_rounds
 
 class QueryData:
@@ -32,16 +57,15 @@ class QueryData:
 class RawCost:
   # domain_size_list includes the domain size of EVERY TREE (same poly different round)
   # query_data_list includes EVERY QUERY
-  def __init__(self, folding_factor, domain_size_list, unify_sumcheck_data_list, fold_sumcheck_data_list, query_data_list):
-    self.folding_factor = folding_factor
-    self.domain_size_list = domain_size_list
+  def __init__(self, merkle_data_list, unify_sumcheck_data_list, fold_sumcheck_data_list, query_data_list):
+    self.merkle_data_list = merkle_data_list
     self.unify_sumcheck_data_list = unify_sumcheck_data_list
     self.fold_sumcheck_data_list = fold_sumcheck_data_list
     self.query_data_list = query_data_list
 
   def get_prover_verifier_cost(self):
     # Overview
-    print("MERKLE NUM LEAFS: ", self.domain_size_list)
+    print("MERKLE NUM LEAFS: ", [m.domain_size for m in self.merkle_data_list])
     print("UNIFY SUMCHECK NUM ROUNDS: ", [d.num_rounds for d in self.unify_sumcheck_data_list])
     print(f"FOLD SUMCHECK NUM ROUNDS: {len(self.fold_sumcheck_data_list)} x {self.fold_sumcheck_data_list[0].num_rounds} rounds each")
     print("NUM QUERIES: ", [q.num_queries for q in self.query_data_list])
@@ -49,11 +73,16 @@ class RawCost:
     # Merkle
     print("--")
     total_merkle_cost = 0
-    for d in self.domain_size_list:
-      num_leafs = d // self.folding_factor
-      # Total size is leaf_size + num_leafs - 1
-      total_merkle_cost += d + num_leafs - 1
-    print("TOTAL MERKLE TREE SIZE: ", total_merkle_cost)
+    for m in self.merkle_data_list:
+      num_leafs = m.domain_size // m.folding_factor
+      # Leaf size
+      if m.is_starting_poly:
+        total_merkle_cost += 8 * num_leafs * m.folding_factor * m.num_polys
+      else:
+        total_merkle_cost += 16 * num_leafs * m.folding_factor * m.num_polys
+      # Intermediate node size
+      total_merkle_cost += 32 * (num_leafs - 1)
+    print(f"TOTAL MERKLE TREE SIZE: {print_bytes(total_merkle_cost)}")
 
     # Sumcheck
     print("--")
@@ -77,7 +106,7 @@ class RawCost:
 
 # Compute number of queries
 def get_num_queries(soundness_type, pow_bits, domain_size, num_vars):
-  security_level = max(0, 32 - pow_bits)
+  security_level = max(0, 100 - pow_bits)
   log_inv_rate = ceil(log(domain_size // (2 ** num_vars), 2))
   if soundness_type == UNIQUE_DECODING:
     rate = 1 / (1 << log_inv_rate)
@@ -90,38 +119,25 @@ def get_num_queries(soundness_type, pow_bits, domain_size, num_vars):
 
 # Compute the cost if no batching occurs
 def compute_no_batch(soundness_type, pow_bits, poly_num_vars, folding_factor):
-  domain_size_list = []
+  merkle_data_list = []
   fold_sumcheck_data_list = []
   query_data_list = []
   for num_var in poly_num_vars:
     domain_size = 2 * (2 ** num_var)
-    domain_size_list.append(domain_size)
+    merkle_data_list.append(MerkleData(domain_size, 1, folding_factor, True))
     while num_var >= folding_factor:
       fold_sumcheck_data_list.append(SumcheckData([num_var], folding_factor))
       query_data_list.append(QueryData(get_num_queries(soundness_type, pow_bits, domain_size, num_var), domain_size // (2 ** folding_factor)))
       num_var -= folding_factor
-      domain_size //= 2
-      domain_size_list.append(domain_size)
-  return RawCost(folding_factor, domain_size_list, [], fold_sumcheck_data_list, query_data_list)
-
-def compute_optimal(soundness_type, pow_bits, poly_num_vars, folding_factor):
-  domain_size_list = []
-  fold_sumcheck_data_list = []
-  query_data_list = []
-  # Assume poly_num_vars is sorted
-  num_var = poly_num_vars[0]
-  domain_size = 2 * (2 ** num_var)
-  domain_size_list.append(domain_size)
-  while num_var >= folding_factor:
-    fold_sumcheck_data_list.append(SumcheckData([num_var], folding_factor))
-    query_data_list.append(QueryData(get_num_queries(soundness_type, pow_bits, domain_size, num_var), domain_size // (2 ** folding_factor)))
-    num_var -= folding_factor
-    domain_size //= 2
-    domain_size_list.append(domain_size)
-  return RawCost(folding_factor, domain_size_list, [], fold_sumcheck_data_list, query_data_list)
+      if num_var >= folding_factor:
+        domain_size //= 2
+        merkle_data_list.append(MerkleData(domain_size, 1, folding_factor, False))
+    # Final sumcheck
+    fold_sumcheck_data_list.append(SumcheckData([num_var], num_var))
+  return RawCost(merkle_data_list, [], fold_sumcheck_data_list, query_data_list)
 
 def compute_batch_no_pad(soundness_type, pow_bits, poly_num_vars, folding_factor):
-  # Compute domain size for each poly
+  # Do not pad, compute domain size for each poly
   poly_domain_size = [2 * (2 ** num_var) for num_var in poly_num_vars]
   num_unique_domain_size = len(set(poly_domain_size))
   return (num_unique_domain_size, compute_batch(soundness_type, pow_bits, poly_num_vars, folding_factor, poly_domain_size))
@@ -155,8 +171,10 @@ def compute_batch_pad_threshold(soundness_type, pow_bits, poly_num_vars, folding
   return (num_unique_domain_size, compute_batch(soundness_type, pow_bits, poly_num_vars, folding_factor, poly_domain_size))
 
 def compute_batch(soundness_type, pow_bits, poly_num_vars, folding_factor, poly_domain_size):
-  # Do not perform any padding, batch in each polynomial when its their turn
-  domain_size_list = poly_domain_size[:] # every polynomial is first encoded as merkle tree
+  # One merkle tree for every starting domain
+  unique_poly = Counter(poly_domain_size)
+
+  merkle_data_list = [MerkleData(poly[0], poly[1], folding_factor, True) for poly in unique_poly.items()]
   unify_sumcheck_data_list = []
   fold_sumcheck_data_list = []
   query_data_list = []
@@ -164,13 +182,22 @@ def compute_batch(soundness_type, pow_bits, poly_num_vars, folding_factor, poly_
   # Remove entries from poly_num_vars and poly_domain_size as polys are unified
   poly_num_vars = poly_num_vars[:]
   poly_domain_size = poly_domain_size[:]
+
+  # Check if this is the first round of a WHIR proof
+  # If it is not, then if any new polys are added, need to query on the merkle tree of both the folded poly and new poly
+  # If a polynomial is completely folded and there are still (smaller) polynomials remaining, the next round is "first round" as well
+  first_round = True
   while len(poly_num_vars) > 0:
     # If num_vars < folding_factor, this polynomial reaches the final round
-    while len(poly_num_vars) > 0 and poly_num_vars[0] < folding_factor:
+    if len(poly_num_vars) > 0 and poly_num_vars[0] < folding_factor:
+      # Final sumcheck
+      fold_sumcheck_data_list.append(SumcheckData([poly_num_vars[0]], poly_num_vars[0]))
       poly_num_vars = poly_num_vars[1:]
       poly_domain_size = poly_domain_size[1:]
+      first_round = True
     if len(poly_num_vars) == 0:
       break
+    
     # Find out how many polynomials have the same domain
     unify_sumcheck_num_polys = 1
     # Perform unifying sumcheck on all polys of the same domain size
@@ -178,23 +205,30 @@ def compute_batch(soundness_type, pow_bits, poly_num_vars, folding_factor, poly_
       while unify_sumcheck_num_polys < len(poly_num_vars) and poly_domain_size[unify_sumcheck_num_polys] == poly_domain_size[0]:
         unify_sumcheck_num_polys += 1
       unify_sumcheck_num_vars_list = poly_num_vars[:unify_sumcheck_num_polys]
-      # It always holds that num_vars[0] <= num_vars[1] == num_vars[2] == ...
-      unify_sumcheck_data_list.append(SumcheckData(unify_sumcheck_num_vars_list, unify_sumcheck_num_vars_list[1]))
-      # Remove all polynomials of the same domain, num_vars of the unified polynomial is num_vars[1]
-      poly_num_vars = poly_num_vars[1:2] + poly_num_vars[unify_sumcheck_num_polys:] # New num_vars 
+      max_num_vars = max(unify_sumcheck_num_vars_list)
+      unify_sumcheck_data_list.append(SumcheckData(unify_sumcheck_num_vars_list, max_num_vars))
+      # Remove all polynomials of the same domain
+      poly_num_vars = [max_num_vars] + poly_num_vars[unify_sumcheck_num_polys:] # New num_vars 
       poly_domain_size = poly_domain_size[:1] + poly_domain_size[unify_sumcheck_num_polys:]
-    # Perform the rest of the WHIR round on the first variable
+    
+    # Perform the rest of the WHIR round on the poly[0]
     num_var = poly_num_vars[0]
     domain_size = poly_domain_size[0]
     assert(num_var >= folding_factor)
     fold_sumcheck_data_list.append(SumcheckData([num_var], folding_factor))
-    # Needs to query on each of the unified polynomial
-    query_data_list.extend([QueryData(get_num_queries(soundness_type, pow_bits, domain_size, num_var), domain_size // (2 ** folding_factor))] * unify_sumcheck_num_polys)
+    # Query on the folded (main) polynomial
+    query_data_list.append(QueryData(get_num_queries(soundness_type, pow_bits, domain_size, num_var), domain_size // (2 ** folding_factor)))
+    if not first_round and unify_sumcheck_num_polys > 1:
+      # Query on the new polynomial(s) to be added
+      query_data_list.append(QueryData(get_num_queries(soundness_type, pow_bits, domain_size, num_var), domain_size // (2 ** folding_factor)))
+    
     poly_num_vars[0] -= folding_factor
-    poly_domain_size[0] //= 2
-    domain_size_list.append(poly_domain_size[0])
+    if poly_num_vars[0] >= folding_factor:
+      poly_domain_size[0] //= 2
+      merkle_data_list.append(MerkleData(poly_domain_size[0], 1, folding_factor, False))
+    first_round = False
 
-  return RawCost(folding_factor, domain_size_list, unify_sumcheck_data_list, fold_sumcheck_data_list, query_data_list)
+  return RawCost(merkle_data_list, unify_sumcheck_data_list, fold_sumcheck_data_list, query_data_list)
 
 # Sort the polynomials from large to small
 poly_num_vars.sort(reverse=True)
@@ -203,9 +237,6 @@ print(f"POLY NUM VARS: {poly_num_vars}, FOLD FACTOR: {folding_factor}")
 print("\n--\nNO BATCH:")
 no_batch_raw_cost = compute_no_batch(soundness_type, pow_bits, poly_num_vars, folding_factor)
 no_batch_raw_cost.get_prover_verifier_cost()
-print("\n--\nTHEORETICAL OPTIMAL:")
-optimal_raw_cost = compute_optimal(soundness_type, pow_bits, poly_num_vars, folding_factor)
-optimal_raw_cost.get_prover_verifier_cost()
 
 print("\n--\nBATCH NO PAD:", end = ' ')
 (num_domains, no_pad_raw_cost) = compute_batch_no_pad(soundness_type, pow_bits, poly_num_vars, folding_factor)

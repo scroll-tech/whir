@@ -126,6 +126,12 @@ def compute_batch_no_pad(soundness_type, pow_bits, poly_num_vars, folding_factor
   num_unique_domain_size = len(set(poly_domain_size))
   return (num_unique_domain_size, compute_batch(soundness_type, pow_bits, poly_num_vars, folding_factor, poly_domain_size))
 
+def compute_batch_all_pad(soundness_type, pow_bits, poly_num_vars, folding_factor):
+  # Pad every polynomial to the largest domain
+  poly_domain_size = [2 * (2 ** poly_num_vars[0])] * len(poly_num_vars)
+  num_unique_domain_size = 1
+  return (num_unique_domain_size, compute_batch(soundness_type, pow_bits, poly_num_vars, folding_factor, poly_domain_size))
+
 def compute_batch_pad_threshold(soundness_type, pow_bits, poly_num_vars, folding_factor, threshold):
   # The prover is allowed extra (threshold)% of starting domain size
   poly_domain_size = [2 * (2 ** num_var) for num_var in poly_num_vars]
@@ -165,10 +171,10 @@ def compute_batch(soundness_type, pow_bits, poly_num_vars, folding_factor, poly_
       poly_domain_size = poly_domain_size[1:]
     if len(poly_num_vars) == 0:
       break
+    # Find out how many polynomials have the same domain
+    unify_sumcheck_num_polys = 1
     # Perform unifying sumcheck on all polys of the same domain size
     if len(poly_num_vars) > 1 and poly_domain_size[0] == poly_domain_size[1]:
-      # Find out how many polynomials have the same domain
-      unify_sumcheck_num_polys = 2
       while unify_sumcheck_num_polys < len(poly_num_vars) and poly_domain_size[unify_sumcheck_num_polys] == poly_domain_size[0]:
         unify_sumcheck_num_polys += 1
       unify_sumcheck_num_vars_list = poly_num_vars[:unify_sumcheck_num_polys]
@@ -182,7 +188,8 @@ def compute_batch(soundness_type, pow_bits, poly_num_vars, folding_factor, poly_
     domain_size = poly_domain_size[0]
     assert(num_var >= folding_factor)
     fold_sumcheck_data_list.append(SumcheckData([num_var], folding_factor))
-    query_data_list.append(QueryData(get_num_queries(soundness_type, pow_bits, domain_size, num_var), domain_size // (2 ** folding_factor)))
+    # Needs to query on each of the unified polynomial
+    query_data_list.extend([QueryData(get_num_queries(soundness_type, pow_bits, domain_size, num_var), domain_size // (2 ** folding_factor))] * unify_sumcheck_num_polys)
     poly_num_vars[0] -= folding_factor
     poly_domain_size[0] //= 2
     domain_size_list.append(poly_domain_size[0])
@@ -202,20 +209,22 @@ optimal_raw_cost.get_prover_verifier_cost()
 
 print("\n--\nBATCH NO PAD:", end = ' ')
 (num_domains, no_pad_raw_cost) = compute_batch_no_pad(soundness_type, pow_bits, poly_num_vars, folding_factor)
-print(f"{num_domains} starting domains")
+print(f"{num_domains} starting domain(s)")
+no_pad_raw_cost.get_prover_verifier_cost()
+print("\n--\nBATCH ALL PAD:", end = ' ')
+(num_domains, no_pad_raw_cost) = compute_batch_all_pad(soundness_type, pow_bits, poly_num_vars, folding_factor)
+print(f"{num_domains} starting domain(s)")
 no_pad_raw_cost.get_prover_verifier_cost()
 
 print("\n--\nBATCH THRESHOLD 25:", end = ' ')
 (num_domains, threshold_raw_cost) = compute_batch_pad_threshold(soundness_type, pow_bits, poly_num_vars, folding_factor, 25)
-print(f"{num_domains} starting domains")
+print(f"{num_domains} starting domain(s)")
 threshold_raw_cost.get_prover_verifier_cost()
-
 print("\n--\nBATCH THRESHOLD 50:", end = ' ')
 (num_domains, threshold_raw_cost) = compute_batch_pad_threshold(soundness_type, pow_bits, poly_num_vars, folding_factor, 50)
-print(f"{num_domains} starting domains")
+print(f"{num_domains} starting domain(s)")
 threshold_raw_cost.get_prover_verifier_cost()
-
 print("\n--\nBATCH THRESHOLD 100:", end = ' ')
 (num_domains, threshold_raw_cost) = compute_batch_pad_threshold(soundness_type, pow_bits, poly_num_vars, folding_factor, 100)
-print(f"{num_domains} starting domains")
+print(f"{num_domains} starting domain(s)")
 threshold_raw_cost.get_prover_verifier_cost()

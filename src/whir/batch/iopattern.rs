@@ -5,24 +5,30 @@ use nimue::plugins::ark::*;
 use crate::{
     fs_utils::{OODIOPattern, WhirPoWIOPattern},
     sumcheck::prover_not_skipping::SumcheckNotSkippingIOPattern,
+    whir::iopattern::DigestIOPattern,
 };
 
-use super::parameters::WhirConfig;
+use crate::whir::parameters::WhirConfig;
 
-pub trait DigestIOPattern<MerkleConfig: Config> {
-    fn add_digest(self, label: &str) -> Self;
-}
-
-pub trait WhirIOPattern<F: FftField, MerkleConfig: Config> {
-    fn commit_statement<PowStrategy>(
+pub trait WhirBatchIOPattern<F: FftField, MerkleConfig: Config> {
+    fn commit_batch_statement<PowStrategy>(
         self,
         params: &WhirConfig<F, MerkleConfig, PowStrategy>,
+        batch_size: usize,
     ) -> Self;
-    fn add_whir_proof<PowStrategy>(self, params: &WhirConfig<F, MerkleConfig, PowStrategy>)
-        -> Self;
+    fn add_whir_unify_proof<PowStrategy>(
+        self,
+        params: &WhirConfig<F, MerkleConfig, PowStrategy>,
+        batch_size: usize,
+    ) -> Self;
+    fn add_whir_batch_proof<PowStrategy>(
+        self,
+        params: &WhirConfig<F, MerkleConfig, PowStrategy>,
+        batch_size: usize,
+    ) -> Self;
 }
 
-impl<F, MerkleConfig, IOPattern> WhirIOPattern<F, MerkleConfig> for IOPattern
+impl<F, MerkleConfig, IOPattern> WhirBatchIOPattern<F, MerkleConfig> for IOPattern
 where
     F: FftField,
     MerkleConfig: Config,
@@ -33,23 +39,45 @@ where
         + OODIOPattern<F>
         + DigestIOPattern<MerkleConfig>,
 {
-    fn commit_statement<PowStrategy>(
+    fn commit_batch_statement<PowStrategy>(
         self,
         params: &WhirConfig<F, MerkleConfig, PowStrategy>,
+        batch_size: usize,
     ) -> Self {
         // TODO: Add params
         let mut this = self.add_digest("merkle_digest");
         if params.committment_ood_samples > 0 {
             assert!(params.initial_statement);
-            this = this.add_ood(params.committment_ood_samples);
+            this = this
+                .challenge_scalars(params.committment_ood_samples, "ood_query")
+                .add_scalars(params.committment_ood_samples * batch_size, "ood_ans");
         }
         this
     }
 
-    fn add_whir_proof<PowStrategy>(
+    fn add_whir_unify_proof<PowStrategy>(
         mut self,
         params: &WhirConfig<F, MerkleConfig, PowStrategy>,
+        batch_size: usize,
     ) -> Self {
+        if batch_size > 1 {
+            self = self.challenge_scalars(1, "batch_poly_combination_randomness");
+        }
+        self = self
+            // .challenge_scalars(1, "initial_combination_randomness")
+            .add_sumcheck(params.mv_parameters.num_variables, 0.);
+        self.add_scalars(batch_size, "unified_folded_evals")
+    }
+
+    fn add_whir_batch_proof<PowStrategy>(
+        mut self,
+        params: &WhirConfig<F, MerkleConfig, PowStrategy>,
+        batch_size: usize,
+    ) -> Self {
+        if batch_size > 1 {
+            self = self.challenge_scalars(1, "batch_poly_combination_randomness");
+        }
+
         // TODO: Add statement
         if params.initial_statement {
             self = self
@@ -60,17 +88,14 @@ where
                 );
         } else {
             self = self
-                .challenge_scalars(
-                    params.folding_factor.at_round(0),
-                    "folding_randomness",
-                )
+                .challenge_scalars(params.folding_factor.at_round(0), "folding_randomness")
                 .pow(params.starting_folding_pow_bits);
         }
 
         let mut domain_size = params.starting_domain.size();
+
         for (round, r) in params.round_parameters.iter().enumerate() {
-            let folded_domain_size =
-                domain_size >> params.folding_factor.at_round(round);
+            let folded_domain_size = domain_size >> params.folding_factor.at_round(round);
             let domain_size_bytes = ((folded_domain_size * 2 - 1).ilog2() as usize + 7) / 8;
             self = self
                 .add_digest("merkle_digest")

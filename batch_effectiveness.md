@@ -35,4 +35,4 @@ Then we present our batching scenarios:
 We note that `t` is an overestimate on prover cost blowup, since it does not account for the merkle trees generated on intermediate WHIR rounds, which the prover needs to pay regardless of padding. `total merkle tree size` comparison between `no pad` and `threshold` provides a more accurate picture.
 
 ## Main Takeaway
-> TODO
+The tradeoff between prover cost on merkle tree and verifier cost on queries is quite linear: larger starting domains always lead to proportionally fewer queries. There does not appear to be a "sweet spot" or diminishing return. In general, even a 25% increase in merkle tree size can lead to significantly reduction on the number of queries. We can incorporate this "threshold" feature into WHIR to allow programmer fine-tuning.

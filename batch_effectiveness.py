@@ -79,7 +79,7 @@ class RawCost:
       if m.is_starting_poly:
         total_merkle_cost += 8 * num_leafs * m.folding_factor * m.num_polys
       else:
-        total_merkle_cost += 16 * num_leafs * m.folding_factor * m.num_polys
+        total_merkle_cost += 16 * num_leafs * m.folding_factor
       # Intermediate node size
       total_merkle_cost += 32 * (num_leafs - 1)
     print(f"TOTAL MERKLE TREE SIZE: {print_bytes(total_merkle_cost)}")

@@ -2,7 +2,7 @@ use super::merkle_config::{Blake3ConfigWrapper, WhirMerkleConfigWrapper};
 use super::{Error, PolynomialCommitmentScheme};
 use crate::crypto::merkle_tree::blake3::{self as mt};
 use crate::parameters::{
-    default_max_pow, FoldType, MultivariateParameters, SoundnessType, WhirParameters,
+    default_max_pow, FoldType, FoldingFactor, MultivariateParameters, SoundnessType, WhirParameters,
 };
 use crate::poly_utils::{coeffs::CoefficientList, MultilinearPoint};
 use crate::whir::{
@@ -13,7 +13,6 @@ use crate::whir::{
 use ark_crypto_primitives::merkle_tree::Config;
 use ark_ff::FftField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::log2;
 use nimue::plugins::ark::{FieldChallenges, FieldWriter};
 pub use nimue::DefaultHash;
 use nimue::IOPattern;
@@ -28,18 +27,20 @@ pub trait WhirSpec<E: FftField>: Default + std::fmt::Debug + Clone {
     type MerkleConfigWrapper: WhirMerkleConfigWrapper<E>;
     fn get_parameters(
         num_variables: usize,
+        for_batch: bool,
     ) -> WhirParameters<MerkleConfigOf<Self, E>, PowOf<Self, E>>;
 
     fn prepare_whir_config(
         num_variables: usize,
+        for_batch: bool,
     ) -> WhirConfig<E, MerkleConfigOf<Self, E>, PowOf<Self, E>> {
-        let whir_params = Self::get_parameters(num_variables);
+        let whir_params = Self::get_parameters(num_variables, for_batch);
         let mv_params = MultivariateParameters::new(num_variables);
         ConfigOf::<Self, E>::new(mv_params, whir_params)
     }
 
     fn prepare_io_pattern(num_variables: usize) -> IOPattern {
-        let params = Self::prepare_whir_config(num_variables);
+        let params = Self::prepare_whir_config(num_variables, false);
 
         let io = IOPattern::<DefaultHash>::new("🌪️");
         let io = <Self::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::commit_statement_to_io_pattern(
@@ -54,7 +55,7 @@ pub trait WhirSpec<E: FftField>: Default + std::fmt::Debug + Clone {
     }
 
     fn prepare_batch_io_pattern(num_variables: usize, batch_size: usize) -> IOPattern {
-        let params = Self::prepare_whir_config(num_variables);
+        let params = Self::prepare_whir_config(num_variables, true);
 
         let io = IOPattern::<DefaultHash>::new("🌪️");
         let io = <Self::MerkleConfigWrapper as WhirMerkleConfigWrapper<E>>::commit_batch_statement_to_io_pattern(
@@ -83,14 +84,23 @@ pub struct WhirDefaultSpec;
 
 impl<E: FftField> WhirSpec<E> for WhirDefaultSpec {
     type MerkleConfigWrapper = Blake3ConfigWrapper<E>;
-    fn get_parameters(num_variables: usize) -> WhirParameters<MerkleConfigOf<Self, E>, Blake3PoW> {
+    fn get_parameters(
+        num_variables: usize,
+        for_batch: bool,
+    ) -> WhirParameters<MerkleConfigOf<Self, E>, Blake3PoW> {
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
         let (leaf_hash_params, two_to_one_params) = mt::default_config::<E>(&mut rng);
         WhirParameters::<MerkleConfigOf<Self, E>, Blake3PoW> {
             initial_statement: true,
             security_level: 100,
             pow_bits: default_max_pow(num_variables, 1),
-            folding_factor: 4,
+            // For batching, the first round folding factor should be set small
+            // to avoid large leaf nodes in proof
+            folding_factor: if for_batch {
+                FoldingFactor::ConstantFromSecondRound(1, 4)
+            } else {
+                FoldingFactor::Constant(4)
+            },
             leaf_hash_params,
             two_to_one_params,
             soundness_type: SoundnessType::ConjectureList,
@@ -215,7 +225,7 @@ where
     }
 
     fn commit(_pp: &Self::Param, poly: &Self::Poly) -> Result<Self::CommitmentWithWitness, Error> {
-        let params = Spec::prepare_whir_config(poly.num_variables());
+        let params = Spec::prepare_whir_config(poly.num_variables(), false);
 
         // The merlin here is just for satisfying the interface of
         // WHIR, which only provides a commit_and_write function.
@@ -250,7 +260,7 @@ where
             }
         }
 
-        let params = Spec::prepare_whir_config(polys[0].num_variables());
+        let params = Spec::prepare_whir_config(polys[0].num_variables(), true);
 
         // The merlin here is just for satisfying the interface of
         // WHIR, which only provides a commit_and_write function.
@@ -273,7 +283,7 @@ where
         point: &[E],
         eval: &E,
     ) -> Result<Self::Proof, Error> {
-        let params = Spec::prepare_whir_config(witness.witness.polys[0].num_variables());
+        let params = Spec::prepare_whir_config(witness.witness.polys[0].num_variables(), false);
         let io = Spec::prepare_io_pattern(witness.witness.polys[0].num_variables());
         let mut merlin = io.to_merlin();
         // In WHIR, the prover writes the commitment to the transcript, then
@@ -325,7 +335,7 @@ where
         point: &[E],
         evals: &[E],
     ) -> Result<Self::Proof, Error> {
-        let params = Spec::prepare_whir_config(witness.witness.polys[0].num_variables());
+        let params = Spec::prepare_whir_config(witness.witness.polys[0].num_variables(), true);
         let io =
             Spec::prepare_batch_io_pattern(witness.witness.polys[0].num_variables(), evals.len());
         let mut merlin = io.to_merlin();
@@ -377,7 +387,7 @@ where
         eval: &E,
         proof: &Self::Proof,
     ) -> Result<(), Error> {
-        let params = Spec::prepare_whir_config(point.len());
+        let params = Spec::prepare_whir_config(point.len(), false);
         let verifier = Verifier::new(params);
         let io = Spec::prepare_io_pattern(point.len());
         let mut arthur = io.to_arthur(&proof.transcript);
@@ -408,7 +418,7 @@ where
         evals: &[E],
         proof: &Self::Proof,
     ) -> Result<(), Error> {
-        let params = Spec::prepare_whir_config(point.len());
+        let params = Spec::prepare_whir_config(point.len(), true);
         let verifier = Verifier::new(params);
         let io = Spec::prepare_batch_io_pattern(point.len(), evals.len());
         let mut arthur = io.to_arthur(&proof.transcript);

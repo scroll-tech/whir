@@ -9,6 +9,7 @@ pub mod parameters;
 pub mod prover;
 pub mod verifier;
 pub mod fs_utils;
+pub mod vm_binding;
 
 #[derive(Debug, Clone, Default)]
 pub struct Statement<F> {

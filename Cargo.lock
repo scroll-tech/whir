@@ -3180,6 +3180,7 @@ dependencies = [
  "nimue",
  "nimue-pow",
  "openvm-native-compiler",
+ "openvm-native-compiler-derive",
  "openvm-native-recursion",
  "openvm-stark-backend",
  "rand",

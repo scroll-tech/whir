@@ -1,13 +1,9 @@
-use std::fs::read;
-
 use crate::crypto::fields::Field64;
-use crate::crypto::merkle_tree::blake3::{self as merkle_tree, Blake3Digest, MerkleTreeParams};
+use crate::crypto::merkle_tree::blake3::{self as merkle_tree, Blake3Digest};
 use crate::poly_utils::MultilinearPoint;
 use crate::whir::{Statement, WhirProof};
-use ark_crypto_primitives::merkle_tree::MultiPath;
 use ark_ff::fields::PrimeField as ArkPrimeField;
 use ark_ff::BigInteger;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use openvm_native_compiler::{
     asm::AsmConfig,
     ir::{Array, Builder, Config, Felt},
@@ -15,9 +11,7 @@ use openvm_native_compiler::{
 };
 use openvm_native_compiler_derive::iter_zip;
 use openvm_native_recursion::hints::{Hintable, InnerChallenge, InnerVal, VecAutoHintable};
-use openvm_stark_backend::p3_field::{
-    extension::BinomialExtensionField, Field as Plonky3Field, FieldAlgebra, FieldExtensionAlgebra,
-};
+use openvm_stark_backend::p3_field::FieldAlgebra;
 
 pub type InnerConfig = AsmConfig<InnerVal, InnerChallenge>;
 type MerkleConfig = merkle_tree::MerkleTreeParams<Field64>;

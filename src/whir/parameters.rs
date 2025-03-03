@@ -18,35 +18,35 @@ where
     F: FftField,
     MerkleConfig: Config,
 {
-    pub(crate) mv_parameters: MultivariateParameters<F>,
-    pub(crate) soundness_type: SoundnessType,
-    pub(crate) security_level: usize,
-    pub(crate) max_pow_bits: usize,
+    pub mv_parameters: MultivariateParameters<F>,
+    pub soundness_type: SoundnessType,
+    pub security_level: usize,
+    pub max_pow_bits: usize,
 
-    pub(crate) committment_ood_samples: usize,
-    pub(crate) initial_statement: bool,
-    pub(crate) starting_domain: Domain<F>,
-    pub(crate) starting_log_inv_rate: usize,
-    pub(crate) starting_folding_pow_bits: f64,
+    pub committment_ood_samples: usize,
+    pub initial_statement: bool,
+    pub starting_domain: Domain<F>,
+    pub starting_log_inv_rate: usize,
+    pub starting_folding_pow_bits: f64,
 
-    pub(crate) folding_factor: usize,
-    pub(crate) round_parameters: Vec<RoundConfig>,
-    pub(crate) fold_optimisation: FoldType,
+    pub folding_factor: usize,
+    pub round_parameters: Vec<RoundConfig>,
+    pub fold_optimisation: FoldType,
 
-    pub(crate) final_queries: usize,
-    pub(crate) final_pow_bits: f64,
-    pub(crate) final_log_inv_rate: usize,
-    pub(crate) final_sumcheck_rounds: usize,
-    pub(crate) final_folding_pow_bits: f64,
+    pub final_queries: usize,
+    pub final_pow_bits: f64,
+    pub final_log_inv_rate: usize,
+    pub final_sumcheck_rounds: usize,
+    pub final_folding_pow_bits: f64,
 
     // PoW parameters
-    pub(crate) pow_strategy: PhantomData<PowStrategy>,
+    pub pow_strategy: PhantomData<PowStrategy>,
 
     // Merkle tree parameters
     #[debug(skip)]
-    pub(crate) leaf_hash_params: LeafParam<MerkleConfig>,
+    pub leaf_hash_params: LeafParam<MerkleConfig>,
     #[debug(skip)]
-    pub(crate) two_to_one_params: TwoToOneParam<MerkleConfig>,
+    pub two_to_one_params: TwoToOneParam<MerkleConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

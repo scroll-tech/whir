@@ -37,9 +37,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use nimue::{DefaultHash, IOPattern};
-    use nimue_pow::blake3::Blake3PoW;
-
+    use nimue::{
+        DefaultHash, IOPattern,
+    };
+    use nimue_pow::{self, blake3::Blake3PoW};
     use crate::crypto::fields::Field64;
     use crate::crypto::merkle_tree::blake3 as merkle_tree;
     use crate::parameters::{FoldType, MultivariateParameters, SoundnessType, WhirParameters};
@@ -117,6 +118,7 @@ mod tests {
 
         let verifier = Verifier::new(params);
         let mut arthur = io.to_arthur(merlin.transcript());
+
         assert!(verifier.verify(&mut arthur, &statement, &proof).is_ok());
     }
 

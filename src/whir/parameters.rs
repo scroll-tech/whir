@@ -50,12 +50,12 @@ where
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct RoundConfig {
-    pub(crate) pow_bits: f64,
-    pub(crate) folding_pow_bits: f64,
-    pub(crate) num_queries: usize,
-    pub(crate) ood_samples: usize,
-    pub(crate) log_inv_rate: usize,
+pub struct RoundConfig {
+    pub pow_bits: f64,
+    pub folding_pow_bits: f64,
+    pub num_queries: usize,
+    pub ood_samples: usize,
+    pub log_inv_rate: usize,
 }
 
 impl<F, MerkleConfig, PowStrategy> WhirConfig<F, MerkleConfig, PowStrategy>

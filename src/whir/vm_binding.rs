@@ -102,7 +102,7 @@ pub struct WhirProofRoundVariable<C: Config> {
 
 #[derive(DslVariable, Clone)]
 pub struct BlakeDigestVariable<C: Config> {
-    digest: Array<C, Felt<C::F>>,
+    pub digest: Array<C, Felt<C::F>>,
 }
 
 impl Hintable<InnerConfig> for Blake3Digest {

@@ -127,9 +127,10 @@ where
                 let [folding_randomness_single] = arthur.challenge_scalars()?;
                 sumcheck_rounds.push((sumcheck_poly, folding_randomness_single));
 
-                if self.params.starting_folding_pow_bits > 0. {
-                    arthur.challenge_pow::<PowStrategy>(self.params.starting_folding_pow_bits)?;
-                }
+                // _debug: POW
+                // if self.params.starting_folding_pow_bits > 0. {
+                //     arthur.challenge_pow::<PowStrategy>(self.params.starting_folding_pow_bits)?;
+                // }
             }
 
             folding_randomness =
@@ -144,10 +145,10 @@ where
             arthur.fill_challenge_scalars(&mut folding_randomness_vec)?;
             folding_randomness = MultilinearPoint(folding_randomness_vec);
 
-            // PoW
-            if self.params.starting_folding_pow_bits > 0. {
-                arthur.challenge_pow::<PowStrategy>(self.params.starting_folding_pow_bits)?;
-            }
+            // _debug: PoW
+            // if self.params.starting_folding_pow_bits > 0. {
+            //     arthur.challenge_pow::<PowStrategy>(self.params.starting_folding_pow_bits)?;
+            // }
         };
 
         let mut prev_root = parsed_commitment.root.clone();
@@ -195,9 +196,10 @@ where
                 return Err(ProofError::InvalidProof);
             }
 
-            if round_params.pow_bits > 0. {
-                arthur.challenge_pow::<PowStrategy>(round_params.pow_bits)?;
-            }
+            // _debug: POW
+            // if round_params.pow_bits > 0. {
+            //     arthur.challenge_pow::<PowStrategy>(round_params.pow_bits)?;
+            // }
 
             let [combination_randomness_gen] = arthur.challenge_scalars()?;
             let combination_randomness = expand_randomness(
@@ -212,9 +214,10 @@ where
                 let [folding_randomness_single] = arthur.challenge_scalars()?;
                 sumcheck_rounds.push((sumcheck_poly, folding_randomness_single));
 
-                if round_params.folding_pow_bits > 0. {
-                    arthur.challenge_pow::<PowStrategy>(round_params.folding_pow_bits)?;
-                }
+                // _debug: POW
+                // if round_params.folding_pow_bits > 0. {
+                //     arthur.challenge_pow::<PowStrategy>(round_params.folding_pow_bits)?;
+                // }
             }
 
             let new_folding_randomness =
@@ -270,9 +273,10 @@ where
             return Err(ProofError::InvalidProof);
         }
 
-        if self.params.final_pow_bits > 0. {
-            arthur.challenge_pow::<PowStrategy>(self.params.final_pow_bits)?;
-        }
+        // _debug: POW
+        // if self.params.final_pow_bits > 0. {
+        //     arthur.challenge_pow::<PowStrategy>(self.params.final_pow_bits)?;
+        // }
 
         let mut final_sumcheck_rounds = Vec::with_capacity(self.params.final_sumcheck_rounds);
         for _ in 0..self.params.final_sumcheck_rounds {
@@ -281,9 +285,10 @@ where
             let [folding_randomness_single] = arthur.challenge_scalars()?;
             final_sumcheck_rounds.push((sumcheck_poly, folding_randomness_single));
 
-            if self.params.final_folding_pow_bits > 0. {
-                arthur.challenge_pow::<PowStrategy>(self.params.final_folding_pow_bits)?;
-            }
+            // _debug: POW
+            // if self.params.final_folding_pow_bits > 0. {
+            //     arthur.challenge_pow::<PowStrategy>(self.params.final_folding_pow_bits)?;
+            // }
         }
         let final_sumcheck_randomness = MultilinearPoint(
             final_sumcheck_rounds

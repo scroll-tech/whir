@@ -127,9 +127,10 @@ where
             let mut folding_randomness = vec![F::ZERO; self.0.folding_factor];
             merlin.fill_challenge_scalars(&mut folding_randomness)?;
 
-            if self.0.starting_folding_pow_bits > 0. {
-                merlin.challenge_pow::<PowStrategy>(self.0.starting_folding_pow_bits)?;
-            }
+            // _debug: POW
+            // if self.0.starting_folding_pow_bits > 0. {
+            //     merlin.challenge_pow::<PowStrategy>(self.0.starting_folding_pow_bits)?;
+            // }
             MultilinearPoint(folding_randomness)
         };
 
@@ -189,10 +190,10 @@ where
                 .collect();
             round_state.merkle_proofs.push((merkle_proof, answers));
 
-            // PoW
-            if self.0.final_pow_bits > 0. {
-                merlin.challenge_pow::<PowStrategy>(self.0.final_pow_bits)?;
-            }
+            // _debug: PoW
+            // if self.0.final_pow_bits > 0. {
+            //     merlin.challenge_pow::<PowStrategy>(self.0.final_pow_bits)?;
+            // }
 
             // Final sumcheck
             if self.0.final_sumcheck_rounds > 0 {
@@ -320,10 +321,10 @@ where
         }
         round_state.merkle_proofs.push((merkle_proof, answers));
 
-        // PoW
-        if round_params.pow_bits > 0. {
-            merlin.challenge_pow::<PowStrategy>(round_params.pow_bits)?;
-        }
+        // _debug: PoW
+        // if round_params.pow_bits > 0. {
+        //     merlin.challenge_pow::<PowStrategy>(round_params.pow_bits)?;
+        // }
 
         // Randomness for combination
         let [combination_randomness_gen] = merlin.challenge_scalars()?;

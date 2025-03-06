@@ -53,6 +53,30 @@ From corollary 3 and 4, we conclude that the optimal strategy for packing is as 
 We further note that if no pad is allowed, then eventually all polys of $p_m^*$ will form packed poly of their own, ensuring $\sum_j |0_j^*| = 0$. So step 2 will terminate.
 
 ## Applying Packing to WHIR
+The goal of packing is to achieve the follows:
+1. Combine polynomials of various sizes into one large polynomial
+2. Unify the different evaluation point of each polynomial down to a single point on the packed polynomial
+
+Without loss of generosity, let $p^*$ be the packed polynomial for $p_1\dots p_k$, so $e^* = e_1 || \dots || e_k || 0^*$. Let $v^*$ be the number of variables of $p^*$, and $v_i$ be the number of variables of each $p_i$, so that the evaluation point on $p_i$ can be expressed as $x_i = (x_{i, 1}, \dots x_{i, v_i})$. The original WHIR claim is as follows:
+$$y_i = \sum_{b\in\{0, 1\}}^{v_i} p_i(b)\cdot eq(b, x_i)$$
+where $eq(b, X)$ is the Lagrange basis polynomial over the hypercube for the point $b$.
+
+To batch multiple polynomials (even of various size) together, the prover can modify the claim to:
+$$\sum_i \alpha^iy_i = \sum_i \alpha^i \sum_{b\in\{0, 1\}}^{v_i}(p_i(b)\cdot eq(b, x_i)) = \sum_{b\in\{0, 1\}}^{v^*}\sum_i \alpha^i (p_i'(b)\cdot eq(b, x_i))$$
+
+where $p_i'(x_{i, 1}, \dots x_{i, v^*}) = p_i(x_{i, v_i+})$ and $x_{i, v_i+} = (x_{i, v^* - v_i + 1}, \dots x_{i, v^*})$
+
+Through sumcheck, the above claim is reduced to individual claims $y_i' = p_i'(r) = p_i(r_{v_i+})$, evaluating on the same point $r = (r_1, \dots r_{v^*})$. We finally show the relationship between $y_i'$ and $y^* = p^*(r)$.
+
+We start from _Corollary 2_, which states that every $e_i$ within $e^*$ starts at an index divisible by $|e_i|$. Since binding the last variable $r_\text{last}$ folds each consecutive entries $(e_k^*, e_{k+1}^*)$ to $e_k^* + r_\text{last}\cdot e_{k+1}^*$, every $e_i$, after binding the last $v_i$ variables, is folded down to a single evaluation $p_i(r_{v_i+}) = y_i'$. Observe that for the rest of the bindings $r_\text{front}$: if $y_i$ or its subsequent folded value is at an even entry (0-indexed), it does not change; otherwise, it is multiplied by $r_\text{front}$.
+
+Thus, $y^*$ can be computed through a DFS on the binary tree $t^*$:
+* Traverse in preorder from the root
+* If reaching a leaf representing $p_i$, set $y$ to $y_i$
+* Otherwise, at depth $d$, set $y = y_l + r_{d+1}\cdot y_r$, where $y_l$ and $y_r$ are the evaluations on the left and right subtree
+* Finally, set $y^*$ to be the $y$ value at root.
+
+The remaining protocols of WHIR can proceed on $p^*$ with $y^*$ as the claimed evaluation.
 
 ## Cost-Analysis of Packing
 Let $d_i = p_i + 1$. The starting domain of the RS code for each polynomial $p_i$ is $2^{d_i}$. Let $f$ be the folding factor, the WHIR proof protocol for each polynomial (standalone) $p_i$ proceeds as follows:

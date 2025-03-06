@@ -37,6 +37,9 @@ def print_bytes(num_bytes):
     suffix = "TB"
   return f"{num_bytes:.3f} {suffix}"
 
+def flatten(xss):
+    return [x for xs in xss for x in xs]
+
 class MerkleData:
   def __init__(self, domain_size, num_polys, folding_factor, is_starting_poly):
     assert(is_starting_poly or num_polys == 1)  # sanity check
@@ -51,9 +54,9 @@ class SumcheckData:
     self.num_rounds = num_rounds
 
 class QueryData:
-  def __init__(self, num_queries, folded_domain_size):
+  def __init__(self, num_queries, merkle_data):
     self.num_queries = num_queries
-    self.folded_domain_size = folded_domain_size
+    self.merkle_data = merkle_data
 
 class RawCost:
   # domain_size_list includes the domain size of EVERY TREE (same poly different round)
@@ -100,10 +103,22 @@ class RawCost:
 
     # Queries
     print("--")
+    total_num_queries = 0
     total_query_depth = 0
+    total_query_size = 0
     for q in self.query_data_list:
-      total_query_depth += q.num_queries * ceil(log(q.folded_domain_size, 2))
-    print("TOTAL QUERY SIZE: ", total_query_depth)
+      total_num_queries += q.num_queries
+      m = q.merkle_data
+      folded_domain_exponent = ceil(log(m.domain_size // m.folding_factor))
+      total_query_depth += q.num_queries * (folded_domain_exponent + 1)
+      if m.is_starting_poly:
+        total_query_size += 8 * q.num_queries * m.folding_factor * m.num_polys
+      else:
+        total_query_size += 16 * q.num_queries * m.folding_factor
+      total_query_size += 32 * q.num_queries * folded_domain_exponent
+    print("TOTAL NUM QUERIES: ", total_num_queries)
+    print("TOTAL QUERY DEPTH: ", total_query_depth)
+    print("TOTAL QUERY SIZE: ", print_bytes(total_query_size))
 
 # Compute number of queries
 def get_num_queries(soundness_type, pow_bits, domain_size, num_vars):
@@ -198,6 +213,20 @@ class PackedPoly:
     right_poly = PackedPoly.new_non_empty(right_num_vars, right_empty_size, right_composition)
     return (left_poly, right_poly)
 
+  # Obtain all the component polys
+  def get_component_polys(self):
+    # Compute the number of integers in self.composition using BFS
+    subtree_list = [self.composition]
+    components_list = []
+    while len(subtree_list) > 0:
+      next_subtree = subtree_list[0]
+      subtree_list = subtree_list[1:]
+      if type(next_subtree) is list:
+        subtree_list.extend(next_subtree)
+      elif type(next_subtree) is int:
+        components_list.append(next_subtree)
+    return components_list
+
 # Compute packing
 # Input a list of num_vars sorted in decreasing order (might contain repetition)
 # The goal is to determine the best packing composition within (threshold)% of merkle leaf size blowup
@@ -220,10 +249,10 @@ def compute_packing(poly_num_vars, threshold):
     (left_poly, right_poly) = packed_polys[-1].split()
     packed_polys = packed_polys[:-1] + [left_poly, right_poly]
     zero_size = packed_polys[-1].empty_size
+  print("| ", end = "")
   for p in packed_polys:
-    print(f"{p.num_vars}: {p.composition}")
-  print(f"Z: {zero_size}, M: {max_zero_size}")
-
+    print(f"{" + ".join([str(n) for n in p.get_component_polys()])} ({p.num_vars})", end = " | ")
+  return packed_polys
 
 # Compute the cost if no batching occurs
 def compute_no_batch(soundness_type, pow_bits, poly_num_vars, folding_factor):
@@ -232,14 +261,16 @@ def compute_no_batch(soundness_type, pow_bits, poly_num_vars, folding_factor):
   query_data_list = []
   for num_var in poly_num_vars:
     domain_size = 2 * (2 ** num_var)
-    merkle_data_list.append(MerkleData(domain_size, 1, folding_factor, True))
+    prev_merkle_data = MerkleData(domain_size, 1, folding_factor, True)
+    merkle_data_list.append(prev_merkle_data)
     while num_var >= folding_factor:
       fold_sumcheck_data_list.append(SumcheckData([num_var], folding_factor))
-      query_data_list.append(QueryData(get_num_queries(soundness_type, pow_bits, domain_size, num_var), domain_size // (2 ** folding_factor)))
+      query_data_list.append(QueryData(get_num_queries(soundness_type, pow_bits, domain_size, num_var), prev_merkle_data))
       num_var -= folding_factor
       if num_var >= folding_factor:
         domain_size //= 2
-        merkle_data_list.append(MerkleData(domain_size, 1, folding_factor, False))
+        prev_merkle_data = MerkleData(domain_size, 1, folding_factor, False)
+        merkle_data_list.append(prev_merkle_data)
     # Final sumcheck
     fold_sumcheck_data_list.append(SumcheckData([num_var], num_var))
   return RawCost(merkle_data_list, [], fold_sumcheck_data_list, query_data_list)
@@ -278,17 +309,34 @@ def compute_batch_pad_threshold(soundness_type, pow_bits, poly_num_vars, folding
   num_unique_domain_size = len(set(poly_domain_size))
   return (num_unique_domain_size, compute_batch(soundness_type, pow_bits, poly_num_vars, folding_factor, poly_domain_size))
 
-def compute_batch(soundness_type, pow_bits, poly_num_vars, folding_factor, poly_domain_size):
+def compute_batch_pack_threshold(soundness_type, pow_bits, poly_num_vars, folding_factor, threshold):
+  # Perform packing
+  packed_polys = compute_packing(poly_num_vars, threshold)
+  poly_num_vars = [p.num_vars for p in packed_polys]
+  poly_domain_size = [2 * (2 ** num_var) for num_var in poly_num_vars]
+  poly_components_list = [p.get_component_polys() for p in packed_polys]
+
+  num_unique_domain_size = len(set(poly_domain_size))
+  return (num_unique_domain_size, compute_batch(soundness_type, pow_bits, poly_num_vars, folding_factor, poly_domain_size, poly_components_list))
+
+# Through packing, every poly might be consisted of component polys
+# When unifying packed polys, the unifying sumcheck is performed on its component polys
+def compute_batch(soundness_type, pow_bits, poly_num_vars, folding_factor, poly_domain_size, poly_components_list=[]):
+  # If packing is not used, components of each poly is simply itself
+  if poly_components_list == []:
+    poly_components_list = [[n] for n in poly_num_vars]
   # One merkle tree for every starting domain
   unique_poly = Counter(poly_domain_size)
-
-  merkle_data_list = [MerkleData(poly[0], poly[1], folding_factor, True) for poly in unique_poly.items()]
+  # For queries
+  merkle_data_per_domain = [MerkleData(poly[0], poly[1], folding_factor, True) for poly in unique_poly.items()]
+  merkle_data_list = merkle_data_per_domain[:]
   unify_sumcheck_data_list = []
   fold_sumcheck_data_list = []
   query_data_list = []
   # Assume poly_num_vars is sorted
   # Remove entries from poly_num_vars and poly_domain_size as polys are unified
   poly_num_vars = poly_num_vars[:]
+  poly_components_list = poly_components_list[:]
   poly_domain_size = poly_domain_size[:]
 
   # Check if this is the first round of a WHIR proof
@@ -301,22 +349,24 @@ def compute_batch(soundness_type, pow_bits, poly_num_vars, folding_factor, poly_
       # Final sumcheck
       fold_sumcheck_data_list.append(SumcheckData([poly_num_vars[0]], poly_num_vars[0]))
       poly_num_vars = poly_num_vars[1:]
+      poly_components_list = poly_components_list[1:]
       poly_domain_size = poly_domain_size[1:]
       first_round = True
     if len(poly_num_vars) == 0:
       break
     
     # Find out how many polynomials have the same domain
-    unify_sumcheck_num_polys = 1
+    unify_sumcheck_num_polys = 0
     # Perform unifying sumcheck on all polys of the same domain size
-    if len(poly_num_vars) > 1 and poly_domain_size[0] == poly_domain_size[1]:
-      while unify_sumcheck_num_polys < len(poly_num_vars) and poly_domain_size[unify_sumcheck_num_polys] == poly_domain_size[0]:
-        unify_sumcheck_num_polys += 1
-      unify_sumcheck_num_vars_list = poly_num_vars[:unify_sumcheck_num_polys]
-      max_num_vars = max(unify_sumcheck_num_vars_list)
+    while unify_sumcheck_num_polys < len(poly_num_vars) and poly_domain_size[unify_sumcheck_num_polys] == poly_domain_size[0]:
+      unify_sumcheck_num_polys += 1
+    unify_sumcheck_num_vars_list = flatten(poly_components_list[:unify_sumcheck_num_polys])
+    if len(unify_sumcheck_num_vars_list) > 1:
+      max_num_vars = max(poly_num_vars[:unify_sumcheck_num_polys]) # Unified poly has same num_vars as the largest packed poly
       unify_sumcheck_data_list.append(SumcheckData(unify_sumcheck_num_vars_list, max_num_vars))
       # Remove all polynomials of the same domain
-      poly_num_vars = [max_num_vars] + poly_num_vars[unify_sumcheck_num_polys:] # New num_vars 
+      poly_num_vars = [max_num_vars] + poly_num_vars[unify_sumcheck_num_polys:] # New num_vars
+      poly_components_list = [[max_num_vars]] + poly_components_list[unify_sumcheck_num_polys:]
       poly_domain_size = poly_domain_size[:1] + poly_domain_size[unify_sumcheck_num_polys:]
     
     # Perform the rest of the WHIR round on the poly[0]
@@ -325,15 +375,20 @@ def compute_batch(soundness_type, pow_bits, poly_num_vars, folding_factor, poly_
     assert(num_var >= folding_factor)
     fold_sumcheck_data_list.append(SumcheckData([num_var], folding_factor))
     # Query on the folded (main) polynomial
-    query_data_list.append(QueryData(get_num_queries(soundness_type, pow_bits, domain_size, num_var), domain_size // (2 ** folding_factor)))
+    query_data_list.append(QueryData(get_num_queries(soundness_type, pow_bits, domain_size, num_var), merkle_data_per_domain[0]))
+    merkle_data_per_domain = merkle_data_per_domain[1:]
     if not first_round and unify_sumcheck_num_polys > 1:
       # Query on the new polynomial(s) to be added
-      query_data_list.append(QueryData(get_num_queries(soundness_type, pow_bits, domain_size, num_var), domain_size // (2 ** folding_factor)))
+      query_data_list.append(QueryData(get_num_queries(soundness_type, pow_bits, domain_size, num_var), merkle_data_per_domain[0]))
+      merkle_data_per_domain = merkle_data_per_domain[1:]
     
     poly_num_vars[0] -= folding_factor
+    poly_components_list[0][0] -= folding_factor
     if poly_num_vars[0] >= folding_factor:
       poly_domain_size[0] //= 2
-      merkle_data_list.append(MerkleData(poly_domain_size[0], 1, folding_factor, False))
+      next_merkle = MerkleData(poly_domain_size[0], 1, folding_factor, False)
+      merkle_data_per_domain = [next_merkle] + merkle_data_per_domain
+      merkle_data_list.append(next_merkle)
     first_round = False
 
   return RawCost(merkle_data_list, unify_sumcheck_data_list, fold_sumcheck_data_list, query_data_list)
@@ -342,9 +397,7 @@ def compute_batch(soundness_type, pow_bits, poly_num_vars, folding_factor, poly_
 poly_num_vars.sort(reverse=True)
 print(f"{len(poly_num_vars)} polys")
 print(f"POLY NUM VARS: {poly_num_vars}, FOLD FACTOR: {folding_factor}")
-compute_packing(poly_num_vars, 50)
 
-"""
 print("\n--\nNO BATCH:")
 no_batch_raw_cost = compute_no_batch(soundness_type, pow_bits, poly_num_vars, folding_factor)
 no_batch_raw_cost.get_prover_verifier_cost()
@@ -358,16 +411,26 @@ print("\n--\nBATCH ALL PAD:", end = ' ')
 print(f"{num_domains} starting domain(s)")
 no_pad_raw_cost.get_prover_verifier_cost()
 
-print("\n--\nBATCH THRESHOLD 25:", end = ' ')
+"""
+print("\n--\nPAD THRESHOLD 25:", end = ' ')
 (num_domains, threshold_raw_cost) = compute_batch_pad_threshold(soundness_type, pow_bits, poly_num_vars, folding_factor, 25)
 print(f"{num_domains} starting domain(s)")
 threshold_raw_cost.get_prover_verifier_cost()
-print("\n--\nBATCH THRESHOLD 50:", end = ' ')
+print("\n--\nPAD THRESHOLD 50:", end = ' ')
 (num_domains, threshold_raw_cost) = compute_batch_pad_threshold(soundness_type, pow_bits, poly_num_vars, folding_factor, 50)
 print(f"{num_domains} starting domain(s)")
 threshold_raw_cost.get_prover_verifier_cost()
-print("\n--\nBATCH THRESHOLD 100:", end = ' ')
+print("\n--\nPAD THRESHOLD 100:", end = ' ')
 (num_domains, threshold_raw_cost) = compute_batch_pad_threshold(soundness_type, pow_bits, poly_num_vars, folding_factor, 100)
 print(f"{num_domains} starting domain(s)")
 threshold_raw_cost.get_prover_verifier_cost()
 """
+
+print("\n--\nPACK THRESHOLD 25:", end = ' ')
+(num_domains, threshold_raw_cost) = compute_batch_pack_threshold(soundness_type, pow_bits, poly_num_vars, folding_factor, 25)
+print(f"{num_domains} starting domain(s)")
+threshold_raw_cost.get_prover_verifier_cost()
+print("\n--\nPACK THRESHOLD 50:", end = ' ')
+(num_domains, threshold_raw_cost) = compute_batch_pack_threshold(soundness_type, pow_bits, poly_num_vars, folding_factor, 50)
+print(f"{num_domains} starting domain(s)")
+threshold_raw_cost.get_prover_verifier_cost()

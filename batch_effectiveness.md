@@ -1,7 +1,7 @@
 # Exploring Batching Effectiveness
 This is the documentation on using and interpreting `batch_effectiveness.py`
 
-## Overview `batch_effectiveness.py`
+## Overview of `batch_effectiveness.py`
 `batch_effectiveness.py` allow a user to provide soundness model, folding factor, and number of variables of a list of polynomials, and compute the prover and verifier cost across different batching models (see below).
 
 To run the script, modify the inputs within the file and run `$ python batch_effectiveness.py`.

@@ -14,8 +14,9 @@ UNIQUE_DECODING = 2
 
 # --
 # INPUTS
-# poly_num_vars = [27, 26, 25, 24, 23, 22]
-poly_num_vars = [27, 26, 23, 21]
+poly_num_vars = [27, 26, 25, 24, 23, 22]
+# poly_num_vars = [27, 26, 23, 21, 21, 21]
+# poly_num_vars = [27, 23, 21, 21, 21, 20]
 folding_factor = 4
 soundness_type = CONJECTURE_LIST
 pow_bits = 0
@@ -119,6 +120,8 @@ class RawCost:
     print("TOTAL NUM QUERIES: ", total_num_queries)
     print("TOTAL QUERY DEPTH: ", total_query_depth)
     print("TOTAL QUERY SIZE: ", print_bytes(total_query_size))
+
+    return (total_merkle_cost, total_query_size)
 
 # Compute number of queries
 def get_num_queries(soundness_type, pow_bits, domain_size, num_vars):
@@ -405,11 +408,11 @@ no_batch_raw_cost.get_prover_verifier_cost()
 print("\n--\nBATCH NO PAD:", end = ' ')
 (num_domains, no_pad_raw_cost) = compute_batch_no_pad(soundness_type, pow_bits, poly_num_vars, folding_factor)
 print(f"{num_domains} starting domain(s)")
-no_pad_raw_cost.get_prover_verifier_cost()
+(prover_baseline, _) = no_pad_raw_cost.get_prover_verifier_cost()
 print("\n--\nBATCH ALL PAD:", end = ' ')
-(num_domains, no_pad_raw_cost) = compute_batch_all_pad(soundness_type, pow_bits, poly_num_vars, folding_factor)
+(num_domains, all_pad_raw_cost) = compute_batch_all_pad(soundness_type, pow_bits, poly_num_vars, folding_factor)
 print(f"{num_domains} starting domain(s)")
-no_pad_raw_cost.get_prover_verifier_cost()
+(_, verifier_baseline) = all_pad_raw_cost.get_prover_verifier_cost()
 
 """
 print("\n--\nPAD THRESHOLD 25:", end = ' ')
@@ -426,11 +429,22 @@ print(f"{num_domains} starting domain(s)")
 threshold_raw_cost.get_prover_verifier_cost()
 """
 
+"""
 print("\n--\nPACK THRESHOLD 25:", end = ' ')
 (num_domains, threshold_raw_cost) = compute_batch_pack_threshold(soundness_type, pow_bits, poly_num_vars, folding_factor, 25)
 print(f"{num_domains} starting domain(s)")
-threshold_raw_cost.get_prover_verifier_cost()
+(prover_cost, verifier_cost) = threshold_raw_cost.get_prover_verifier_cost()
+prover_scale = prover_cost / prover_baseline * 100
+verifier_scale = verifier_cost / verifier_baseline * 100
+print(f"Merkle Cost: {prover_scale:.1f}% of all pad")
+print(f"Query Cost: {verifier_scale:.1f}% of no pad")
+"""
+
 print("\n--\nPACK THRESHOLD 50:", end = ' ')
 (num_domains, threshold_raw_cost) = compute_batch_pack_threshold(soundness_type, pow_bits, poly_num_vars, folding_factor, 50)
 print(f"{num_domains} starting domain(s)")
-threshold_raw_cost.get_prover_verifier_cost()
+(prover_cost, verifier_cost) = threshold_raw_cost.get_prover_verifier_cost()
+prover_scale = prover_cost / prover_baseline * 100
+verifier_scale = verifier_cost / verifier_baseline * 100
+print(f"Merkle Cost: {prover_scale:.1f}% of ALL PAD")
+print(f"Query Cost: {verifier_scale:.1f}% of NO PAD")

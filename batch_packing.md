@@ -79,7 +79,7 @@ Thus, $y^*$ can be computed through a DFS on the binary tree $t^*$:
 The remaining protocols of WHIR can proceed on $p^*$ with $y^*$ as the claimed evaluation.
 
 ## Cost-Analysis of Packing
-Let $d_i = p_i + 1$. The starting domain of the RS code for each polynomial $p_i$ is $2^{d_i}$. Let $f$ be the folding factor, the WHIR proof protocol for each polynomial (standalone) $p_i$ proceeds as follows:
+For each polynomial $p_i$, let $d_i = v_i + 1$. The starting domain of the RS code for $p_i$ is $2^{d_i}$. Let $f$ be the folding factor, the WHIR proof protocol for each standalone $p_i$ proceeds as follows:
 * At the beginning, $\mathcal{P}$ commits to a merkle tree $m_i^{(1)}$ on the RS code of $p_i$, with leaf size $8f$ bytes, intermediate node size 32 bytes, and depth $v_i - f$.
 * During each round $j$, $\mathcal{P}$ and $\mathcal{V}$:
   * Performs a $f$-round sumcheck to produce $p_i^{(j)}$ with $v_i^{(j)} = v_i^{(j-1)} - f$ variables
@@ -87,3 +87,12 @@ Let $d_i = p_i + 1$. The starting domain of the RS code for each polynomial $p_i
   * Computes $d_i^{(j)} = d_i^{(j-1)} - 1$, and $\mathcal{P}$ commits to a merkle tree $m_i^{(j+1)}$ on the RS code of $p_i^{(j)}$, with leaf size $16f$ bytes, intermediate node size 32 bytes, and depth $v_i^{(j)} - f$.
 * Repeat until $v_i^{(d)} < f$ for some round $d$. Perform a final $v_i$-round sumcheck.
 
+We remark that:
+1. The number of queries $q_i^{(j)}$ decreases quickly on $j$, so the verifier cost is often dominated by $q_i^{(1)}$ and $q_i^{(2)}$.
+2. As long as $d_i = v_i + 1$, the number of queries in the first round $q_i^{(1)}$ is also independent of $v_i$ or $d_i$. 
+
+We observe that, if a group of $k$ polynomials $p_i \dots p_{i+k-1}$ share the same number of variables and thus domain, then they can be batched into the same initial merkle tree $m_j^*$ with leaf size $k\cdot 8f$. The rest of the protocol (including subsequent merkle trees) remain unchanged. Since the above packing protocol ensures $v_1^* = \dots v_{m-1}^*$, all front $m-1$ packed polynomials can be batched and verified as one. We now discuss the case for splitting final polynomial $p_m^*$.
+
+Our main conclusion is derived from remark 2. Everything split introduces one (or two) new domain sizes, and since $q_i^{(1)}$ is independent of $d_i$, this means that every split introduces (at least) $q_i^{(1)}$ new queries, which translates to $\geq 1/m$ blowup for $\mathcal{V}$ cost. Thus, ***verifier cost blowup per split is linear***. On the otherhand, after each split, the pad size reduces by at most $2^{v_{m}^* - 1}$. Since every split reduces $v_m^*$ by at least half, the ***prover cost reduction per split decreases exponentially***.
+
+Our conclusion is that splitting should generally be avoided, and should _almost never be performed more than once_.

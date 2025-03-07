@@ -3,7 +3,7 @@
 In this document, we discuss a new strategy to produced batched WHIR proofs called packing.
 
 ## Implementation
-We implemented our packing strategy in `batch_effectiveness_packing.py`. The next step is to integrate the packing result into our main WHIR batching effectiveness test.
+We implemented our packing strategy in `batch_effectiveness_packing.py`. You can change the value of in `poly_num_vars` for different test cases.
 
 ## Packing Overview
 Let $p_1, \dots p_n$ be $n$ multilinear polynomials of various size. We want to batch open each $p_i$ on a different point $x_i$. Denote $v_i$ to be the number of variables of variables for each $p_i$, we assume that _the polynomials are order by their size in decreasing order_, i.e. $\forall i, v_i \geq v_{i+1}$
@@ -58,7 +58,7 @@ The goal of packing is to achieve the follows:
 2. Unify the different evaluation point of each polynomial down to a single point on the packed polynomial
 
 Without loss of generosity, let $p^*$ be the packed polynomial for $p_1\dots p_k$, so $e^* = e_1 || \dots || e_k || 0^*$. Let $v^*$ be the number of variables of $p^*$, and $v_i$ be the number of variables of each $p_i$, so that the evaluation point on $p_i$ can be expressed as $x_i = (x_{i, 1}, \dots x_{i, v_i})$. The original WHIR claim is as follows:
-$$y_i = \sum_{b\in\{0, 1\}}^{v_i} p_i(b)\cdot eq(b, x_i)$$
+$$y_i = \sum_{b\in\{0, 1\}^{v_i}} p_i(b)\cdot eq(b, x_i)$$
 where $eq(b, X)$ is the Lagrange basis polynomial over the hypercube for the point $b$.
 
 To batch multiple polynomials (even of various size) together, the prover can modify the claim to:

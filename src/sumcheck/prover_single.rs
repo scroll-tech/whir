@@ -72,7 +72,7 @@ where
     }
 
     #[cfg(feature = "parallel")]
-    pub fn compute_sumcheck_polynomial(&self) -> SumcheckPolynomial<F> {
+    pub(crate) fn compute_sumcheck_polynomial(&self) -> SumcheckPolynomial<F> {
         assert!(self.num_variables >= 1);
 
         // Compute coefficients of the quadratic result polynomial
@@ -107,7 +107,7 @@ where
     // Evaluate the eq function on for a given point on the hypercube, and add
     // the result multiplied by the scalar to the output.
     #[cfg(not(feature = "parallel"))]
-    fn eval_eq(eval: &[F], out: &mut [F], scalar: F) {
+    pub(crate) fn eval_eq(eval: &[F], out: &mut [F], scalar: F) {
         debug_assert_eq!(out.len(), 1 << eval.len());
         if let Some((&x, tail)) = eval.split_first() {
             let (low, high) = out.split_at_mut(out.len() / 2);
@@ -123,7 +123,7 @@ where
     // Evaluate the eq function on a given point on the hypercube, and add
     // the result multiplied by the scalar to the output.
     #[cfg(feature = "parallel")]
-    fn eval_eq(eval: &[F], out: &mut [F], scalar: F) {
+    pub fn eval_eq(eval: &[F], out: &mut [F], scalar: F) {
         const PARALLEL_THRESHOLD: usize = 10;
         debug_assert_eq!(out.len(), 1 << eval.len());
         if let Some((&x, tail)) = eval.split_first() {

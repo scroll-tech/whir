@@ -6,6 +6,8 @@ use nimue_pow::PowStrategy;
 use crate::crypto::merkle_tree::blake3::MerkleTreeParams as Blake3Params;
 use crate::crypto::merkle_tree::keccak::MerkleTreeParams as KeccakParams;
 use crate::poly_utils::coeffs::CoefficientList;
+use crate::poly_utils::MultilinearPoint;
+use crate::whir::batch::{WhirBatchIOPattern, Witnesses};
 use crate::whir::committer::{Committer, Witness};
 use crate::whir::fs_utils::DigestWriter;
 use crate::whir::iopattern::WhirIOPattern;
@@ -24,6 +26,12 @@ pub trait WhirMerkleConfigWrapper<F: FftField> {
         poly: CoefficientList<F::BasePrimeField>,
     ) -> ProofResult<Witness<F, Self::MerkleConfig>>;
 
+    fn commit_to_merlin_batch(
+        committer: &Committer<F, Self::MerkleConfig, Self::PowStrategy>,
+        merlin: &mut Merlin<DefaultHash>,
+        polys: &[CoefficientList<F::BasePrimeField>],
+    ) -> ProofResult<Witnesses<F, Self::MerkleConfig>>;
+
     fn prove_with_merlin(
         prover: &Prover<F, Self::MerkleConfig, Self::PowStrategy>,
         merlin: &mut Merlin,
@@ -31,10 +39,26 @@ pub trait WhirMerkleConfigWrapper<F: FftField> {
         witness: Witness<F, Self::MerkleConfig>,
     ) -> ProofResult<WhirProof<Self::MerkleConfig, F>>;
 
+    fn prove_with_merlin_simple_batch(
+        prover: &Prover<F, Self::MerkleConfig, Self::PowStrategy>,
+        merlin: &mut Merlin,
+        point: &[F],
+        evals: &[F],
+        witness: &Witnesses<F, Self::MerkleConfig>,
+    ) -> ProofResult<WhirProof<Self::MerkleConfig, F>>;
+
     fn verify_with_arthur(
         verifier: &Verifier<F, Self::MerkleConfig, Self::PowStrategy>,
         arthur: &mut Arthur,
         statement: &Statement<F>,
+        whir_proof: &WhirProof<Self::MerkleConfig, F>,
+    ) -> ProofResult<<Self::MerkleConfig as Config>::InnerDigest>;
+
+    fn verify_with_arthur_simple_batch(
+        verifier: &Verifier<F, Self::MerkleConfig, Self::PowStrategy>,
+        arthur: &mut Arthur,
+        point: &[F],
+        evals: &[F],
         whir_proof: &WhirProof<Self::MerkleConfig, F>,
     ) -> ProofResult<<Self::MerkleConfig as Config>::InnerDigest>;
 
@@ -46,6 +70,18 @@ pub trait WhirMerkleConfigWrapper<F: FftField> {
     fn add_whir_proof_to_io_pattern(
         iopattern: IOPattern,
         params: &WhirConfig<F, Self::MerkleConfig, Self::PowStrategy>,
+    ) -> IOPattern;
+
+    fn commit_batch_statement_to_io_pattern(
+        iopattern: IOPattern,
+        params: &WhirConfig<F, Self::MerkleConfig, Self::PowStrategy>,
+        batch_size: usize,
+    ) -> IOPattern;
+
+    fn add_whir_batch_proof_to_io_pattern(
+        iopattern: IOPattern,
+        params: &WhirConfig<F, Self::MerkleConfig, Self::PowStrategy>,
+        batch_size: usize,
     ) -> IOPattern;
 
     fn add_digest_to_merlin(
@@ -68,6 +104,14 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for Blake3ConfigWrapper<F> {
         committer.commit(merlin, poly)
     }
 
+    fn commit_to_merlin_batch(
+        committer: &Committer<F, Self::MerkleConfig, Self::PowStrategy>,
+        merlin: &mut Merlin<DefaultHash>,
+        polys: &[CoefficientList<F::BasePrimeField>],
+    ) -> ProofResult<Witnesses<F, Self::MerkleConfig>> {
+        committer.batch_commit(merlin, polys)
+    }
+
     fn prove_with_merlin(
         prover: &Prover<F, Self::MerkleConfig, Self::PowStrategy>,
         merlin: &mut Merlin,
@@ -77,6 +121,17 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for Blake3ConfigWrapper<F> {
         prover.prove(merlin, statement, witness)
     }
 
+    fn prove_with_merlin_simple_batch(
+        prover: &Prover<F, Self::MerkleConfig, Self::PowStrategy>,
+        merlin: &mut Merlin,
+        point: &[F],
+        evals: &[F],
+        witness: &Witnesses<F, Self::MerkleConfig>,
+    ) -> ProofResult<WhirProof<Self::MerkleConfig, F>> {
+        let points = [MultilinearPoint(point.to_vec())];
+        prover.simple_batch_prove(merlin, &points, &[evals.to_vec()], witness)
+    }
+
     fn verify_with_arthur(
         verifier: &Verifier<F, Self::MerkleConfig, Self::PowStrategy>,
         arthur: &mut Arthur,
@@ -84,6 +139,17 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for Blake3ConfigWrapper<F> {
         whir_proof: &WhirProof<Self::MerkleConfig, F>,
     ) -> ProofResult<<Self::MerkleConfig as Config>::InnerDigest> {
         verifier.verify(arthur, statement, whir_proof)
+    }
+
+    fn verify_with_arthur_simple_batch(
+        verifier: &Verifier<F, Self::MerkleConfig, Self::PowStrategy>,
+        arthur: &mut Arthur,
+        point: &[F],
+        evals: &[F],
+        whir_proof: &WhirProof<Self::MerkleConfig, F>,
+    ) -> ProofResult<<Self::MerkleConfig as Config>::InnerDigest> {
+        let points = [MultilinearPoint(point.to_vec())];
+        verifier.simple_batch_verify(arthur, evals.len(), &points, &[evals.to_vec()], whir_proof)
     }
 
     fn commit_statement_to_io_pattern(
@@ -98,6 +164,22 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for Blake3ConfigWrapper<F> {
         params: &WhirConfig<F, Self::MerkleConfig, Self::PowStrategy>,
     ) -> IOPattern {
         iopattern.add_whir_proof(params)
+    }
+
+    fn commit_batch_statement_to_io_pattern(
+        iopattern: IOPattern,
+        params: &WhirConfig<F, Self::MerkleConfig, Self::PowStrategy>,
+        batch_size: usize,
+    ) -> IOPattern {
+        iopattern.commit_batch_statement(params, batch_size)
+    }
+
+    fn add_whir_batch_proof_to_io_pattern(
+        iopattern: IOPattern,
+        params: &WhirConfig<F, Self::MerkleConfig, Self::PowStrategy>,
+        batch_size: usize,
+    ) -> IOPattern {
+        iopattern.add_whir_batch_proof(params, batch_size)
     }
 
     fn add_digest_to_merlin(
@@ -119,6 +201,14 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for KeccakConfigWrapper<F> {
         committer.commit(merlin, poly)
     }
 
+    fn commit_to_merlin_batch(
+        committer: &Committer<F, Self::MerkleConfig, Self::PowStrategy>,
+        merlin: &mut Merlin<DefaultHash>,
+        polys: &[CoefficientList<F::BasePrimeField>],
+    ) -> ProofResult<Witnesses<F, Self::MerkleConfig>> {
+        committer.batch_commit(merlin, polys)
+    }
+
     fn prove_with_merlin(
         prover: &Prover<F, Self::MerkleConfig, Self::PowStrategy>,
         merlin: &mut Merlin,
@@ -128,6 +218,17 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for KeccakConfigWrapper<F> {
         prover.prove(merlin, statement, witness)
     }
 
+    fn prove_with_merlin_simple_batch(
+        prover: &Prover<F, Self::MerkleConfig, Self::PowStrategy>,
+        merlin: &mut Merlin,
+        point: &[F],
+        evals: &[F],
+        witness: &Witnesses<F, Self::MerkleConfig>,
+    ) -> ProofResult<WhirProof<Self::MerkleConfig, F>> {
+        let points = [MultilinearPoint(point.to_vec())];
+        prover.simple_batch_prove(merlin, &points, &[evals.to_vec()], witness)
+    }
+
     fn verify_with_arthur(
         verifier: &Verifier<F, Self::MerkleConfig, Self::PowStrategy>,
         arthur: &mut Arthur,
@@ -135,6 +236,17 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for KeccakConfigWrapper<F> {
         whir_proof: &WhirProof<Self::MerkleConfig, F>,
     ) -> ProofResult<<Self::MerkleConfig as Config>::InnerDigest> {
         verifier.verify(arthur, statement, whir_proof)
+    }
+
+    fn verify_with_arthur_simple_batch(
+        verifier: &Verifier<F, Self::MerkleConfig, Self::PowStrategy>,
+        arthur: &mut Arthur,
+        point: &[F],
+        evals: &[F],
+        whir_proof: &WhirProof<Self::MerkleConfig, F>,
+    ) -> ProofResult<<Self::MerkleConfig as Config>::InnerDigest> {
+        let points = [MultilinearPoint(point.to_vec())];
+        verifier.simple_batch_verify(arthur, evals.len(), &points, &[evals.to_vec()], whir_proof)
     }
 
     fn commit_statement_to_io_pattern(
@@ -149,6 +261,22 @@ impl<F: FftField> WhirMerkleConfigWrapper<F> for KeccakConfigWrapper<F> {
         params: &WhirConfig<F, Self::MerkleConfig, Self::PowStrategy>,
     ) -> IOPattern {
         iopattern.add_whir_proof(params)
+    }
+
+    fn commit_batch_statement_to_io_pattern(
+        iopattern: IOPattern,
+        params: &WhirConfig<F, Self::MerkleConfig, Self::PowStrategy>,
+        batch_size: usize,
+    ) -> IOPattern {
+        iopattern.commit_batch_statement(params, batch_size)
+    }
+
+    fn add_whir_batch_proof_to_io_pattern(
+        iopattern: IOPattern,
+        params: &WhirConfig<F, Self::MerkleConfig, Self::PowStrategy>,
+        batch_size: usize,
+    ) -> IOPattern {
+        iopattern.add_whir_batch_proof(params, batch_size)
     }
 
     fn add_digest_to_merlin(

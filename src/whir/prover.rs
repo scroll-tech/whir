@@ -14,6 +14,7 @@ use crate::{
 use ark_crypto_primitives::merkle_tree::{Config, MerkleTree, MultiPath};
 use ark_ff::FftField;
 use ark_poly::EvaluationDomain;
+use ark_std::{end_timer, start_timer};
 use nimue::{
     plugins::ark::{FieldChallenges, FieldWriter},
     ByteChallenges, ByteWriter, ProofResult,
@@ -35,7 +36,7 @@ where
     MerkleConfig: Config<Leaf = [F]>,
     PowStrategy: nimue_pow::PowStrategy,
 {
-    fn validate_parameters(&self) -> bool {
+    pub(crate) fn validate_parameters(&self) -> bool {
         self.0.mv_parameters.num_variables
             == (self.0.n_rounds() + 1) * self.0.folding_factor + self.0.final_sumcheck_rounds
     }
@@ -68,16 +69,29 @@ where
     pub fn prove<Merlin>(
         &self,
         merlin: &mut Merlin,
-        statement: Statement<F>,
+        mut statement: Statement<F>,
         witness: Witness<F, MerkleConfig>,
     ) -> ProofResult<WhirProof<MerkleConfig, F>>
     where
-        Merlin: FieldChallenges<F> + FieldWriter<F> + ByteChallenges + ByteWriter + PoWChallenge + DigestWriter<MerkleConfig>,
+        Merlin: FieldChallenges<F>
+            + FieldWriter<F>
+            + ByteChallenges
+            + ByteWriter
+            + PoWChallenge
+            + DigestWriter<MerkleConfig>,
     {
+        // If any evaluation point is shorter than the folding factor, pad with 0 in front
+        for p in statement.points.iter_mut() {
+            while p.n_variables() < self.0.folding_factor {
+                p.0.insert(0, F::ONE);
+            }
+        }
+
         assert!(self.validate_parameters());
         assert!(self.validate_statement(&statement));
         assert!(self.validate_witness(&witness));
 
+        let timer = start_timer!(|| "Single Prover");
         let initial_claims: Vec<_> = witness
             .ood_points
             .into_iter()
@@ -144,16 +158,27 @@ where
             merkle_proofs: vec![],
         };
 
-        self.round(merlin, round_state)
+        let round_timer = start_timer!(|| "Single Round");
+        let result = self.round(merlin, round_state);
+        end_timer!(round_timer);
+
+        end_timer!(timer);
+
+        result
     }
 
-    fn round<Merlin>(
+    pub(crate) fn round<Merlin>(
         &self,
         merlin: &mut Merlin,
         mut round_state: RoundState<F, MerkleConfig>,
     ) -> ProofResult<WhirProof<MerkleConfig, F>>
     where
-        Merlin: FieldChallenges<F> + ByteChallenges + FieldWriter<F> + ByteWriter + PoWChallenge + DigestWriter<MerkleConfig>,
+        Merlin: FieldChallenges<F>
+            + ByteChallenges
+            + FieldWriter<F>
+            + ByteWriter
+            + PoWChallenge
+            + DigestWriter<MerkleConfig>,
     {
         // Fold the coefficients
         let folded_coefficients = round_state
@@ -175,7 +200,7 @@ where
                 self.0.final_queries,
                 merlin,
             )?;
-            
+
             let merkle_proof = round_state
                 .prev_merkle
                 .generate_multi_proof(final_challenge_indexes.clone())
@@ -350,11 +375,12 @@ where
                 )
             });
 
-        let folding_randomness = sumcheck_prover.compute_sumcheck_polynomials::<PowStrategy, Merlin>(
-            merlin,
-            self.0.folding_factor,
-            round_params.folding_pow_bits,
-        )?;
+        let folding_randomness = sumcheck_prover
+            .compute_sumcheck_polynomials::<PowStrategy, Merlin>(
+                merlin,
+                self.0.folding_factor,
+                round_params.folding_pow_bits,
+            )?;
 
         let round_state = RoundState {
             round: round_state.round + 1,
@@ -371,17 +397,17 @@ where
     }
 }
 
-struct RoundState<F, MerkleConfig>
+pub(crate) struct RoundState<F, MerkleConfig>
 where
     F: FftField,
     MerkleConfig: Config,
 {
-    round: usize,
-    domain: Domain<F>,
-    sumcheck_prover: Option<SumcheckProverNotSkipping<F>>,
-    folding_randomness: MultilinearPoint<F>,
-    coefficients: CoefficientList<F>,
-    prev_merkle: MerkleTree<MerkleConfig>,
-    prev_merkle_answers: Vec<F>,
-    merkle_proofs: Vec<(MultiPath<MerkleConfig>, Vec<Vec<F>>)>,
+    pub(crate) round: usize,
+    pub(crate) domain: Domain<F>,
+    pub(crate) sumcheck_prover: Option<SumcheckProverNotSkipping<F>>,
+    pub(crate) folding_randomness: MultilinearPoint<F>,
+    pub(crate) coefficients: CoefficientList<F>,
+    pub(crate) prev_merkle: MerkleTree<MerkleConfig>,
+    pub(crate) prev_merkle_answers: Vec<F>,
+    pub(crate) merkle_proofs: Vec<(MultiPath<MerkleConfig>, Vec<Vec<F>>)>,
 }

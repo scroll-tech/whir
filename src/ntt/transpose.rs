@@ -2,6 +2,8 @@ use super::super::utils::is_power_of_two;
 use super::{utils::workload_size, MatrixMut};
 use std::mem::swap;
 
+use ark_std::{end_timer, start_timer};
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 #[cfg(feature = "parallel")]
 use rayon::join;
 
@@ -13,13 +15,13 @@ use rayon::join;
 /// This algorithm assumes that both rows and cols are powers of two.
 pub fn transpose<F: Sized + Copy + Send>(matrix: &mut [F], rows: usize, cols: usize) {
     debug_assert_eq!(matrix.len() % (rows * cols), 0);
-    debug_assert!(is_power_of_two(rows));
-    debug_assert!(is_power_of_two(cols));
     // eprintln!(
     //     "Transpose {} x {rows} x {cols} matrix.",
     //     matrix.len() / (rows * cols)
     // );
     if rows == cols {
+        debug_assert!(is_power_of_two(rows));
+        debug_assert!(is_power_of_two(cols));
         for matrix in matrix.chunks_exact_mut(rows * cols) {
             let matrix = MatrixMut::from_mut_slice(matrix, rows, cols);
             transpose_square(matrix);
@@ -27,13 +29,100 @@ pub fn transpose<F: Sized + Copy + Send>(matrix: &mut [F], rows: usize, cols: us
     } else {
         // TODO: Special case for rows = 2 * cols and cols = 2 * rows.
         // TODO: Special case for very wide matrices (e.g. n x 16).
-        let mut scratch = vec![matrix[0]; rows * cols];
+        let mut scratch = Vec::with_capacity(rows * cols);
+        unsafe {
+            scratch.set_len(rows * cols);
+        }
         for matrix in matrix.chunks_exact_mut(rows * cols) {
             scratch.copy_from_slice(matrix);
             let src = MatrixMut::from_mut_slice(scratch.as_mut_slice(), rows, cols);
             let dst = MatrixMut::from_mut_slice(matrix, cols, rows);
             transpose_copy(src, dst);
         }
+    }
+}
+
+pub fn transpose_bench_allocate<F: Sized + Copy + Send>(
+    matrix: &mut [F],
+    rows: usize,
+    cols: usize,
+) {
+    debug_assert_eq!(matrix.len() % (rows * cols), 0);
+    // eprintln!(
+    //     "Transpose {} x {rows} x {cols} matrix.",
+    //     matrix.len() / (rows * cols)
+    // );
+    if rows == cols {
+        debug_assert!(is_power_of_two(rows));
+        debug_assert!(is_power_of_two(cols));
+        for matrix in matrix.chunks_exact_mut(rows * cols) {
+            let matrix = MatrixMut::from_mut_slice(matrix, rows, cols);
+            transpose_square(matrix);
+        }
+    } else {
+        // TODO: Special case for rows = 2 * cols and cols = 2 * rows.
+        // TODO: Special case for very wide matrices (e.g. n x 16).
+        let allocate_timer = start_timer!(|| "Allocate scratch.");
+        let mut scratch = Vec::with_capacity(rows * cols);
+        unsafe {
+            scratch.set_len(rows * cols);
+        }
+        end_timer!(allocate_timer);
+        for matrix in matrix.chunks_exact_mut(rows * cols) {
+            let copy_timer = start_timer!(|| "Copy from slice.");
+            scratch.copy_from_slice(matrix);
+            end_timer!(copy_timer);
+            let src = MatrixMut::from_mut_slice(scratch.as_mut_slice(), rows, cols);
+            let dst = MatrixMut::from_mut_slice(matrix, cols, rows);
+            let transpose_copy_timer = start_timer!(|| "Transpose Copy.");
+            transpose_copy(src, dst);
+            end_timer!(transpose_copy_timer);
+        }
+    }
+}
+
+pub fn transpose_test<F: Sized + Copy + Send>(
+    matrix: &mut [F],
+    rows: usize,
+    cols: usize,
+    buffer: &mut [F],
+) {
+    debug_assert_eq!(matrix.len() % (rows * cols), 0);
+    // eprintln!(
+    //     "Transpose {} x {rows} x {cols} matrix.",
+    //     matrix.len() / (rows * cols)
+    // );
+    if rows == cols {
+        debug_assert!(is_power_of_two(rows));
+        debug_assert!(is_power_of_two(cols));
+        for matrix in matrix.chunks_exact_mut(rows * cols) {
+            let matrix = MatrixMut::from_mut_slice(matrix, rows, cols);
+            transpose_square(matrix);
+        }
+    } else {
+        let buffer = &mut buffer[0..rows * cols];
+        // TODO: Special case for rows = 2 * cols and cols = 2 * rows.
+        // TODO: Special case for very wide matrices (e.g. n x 16).
+        let transpose_timer = start_timer!(|| "Transpose.");
+        for matrix in matrix.chunks_exact_mut(rows * cols) {
+            let copy_timer = start_timer!(|| "Copy from slice.");
+            // buffer.copy_from_slice(matrix);
+            buffer
+                .par_iter_mut()
+                .zip(matrix.par_iter_mut())
+                .for_each(|(dst, src)| {
+                    *dst = *src;
+                });
+            end_timer!(copy_timer);
+            let transform_timer = start_timer!(|| "From mut slice.");
+            let src = MatrixMut::from_mut_slice(buffer, rows, cols);
+            let dst = MatrixMut::from_mut_slice(matrix, cols, rows);
+            end_timer!(transform_timer);
+            let transpose_copy_timer = start_timer!(|| "Transpose copy.");
+            transpose_copy(src, dst);
+            end_timer!(transpose_copy_timer);
+        }
+        end_timer!(transpose_timer);
     }
 }
 
@@ -85,10 +174,7 @@ fn transpose_copy_parallel<F: Sized + Copy + Send>(
 
 /// Sets `dst` to the transpose of `src`. This will panic if the sizes of `src` and `dst` are not compatible.
 /// This is the non-parallel version
-fn transpose_copy_not_parallel<F: Sized + Copy>(
-    src: MatrixMut<'_, F>,
-    mut dst: MatrixMut<'_, F>,
-) {
+fn transpose_copy_not_parallel<F: Sized + Copy>(src: MatrixMut<'_, F>, mut dst: MatrixMut<'_, F>) {
     assert_eq!(src.rows(), dst.cols());
     assert_eq!(src.cols(), dst.rows());
     if src.rows() * src.cols() > workload_size::<F>() {

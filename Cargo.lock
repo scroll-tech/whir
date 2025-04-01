@@ -1458,13 +1458,12 @@ dependencies = [
 [[package]]
 name = "nimue"
 version = "0.2.0"
-source = "git+https://github.com/arkworks-rs/nimue#b28eb124420eede1a890e3c64b37adfff94938d3"
+source = "git+https://github.com/arkworks-rs/nimue?rev=3a83250#3a83250d9e30046be464753901430710232561fc"
 dependencies = [
  "ark-ec",
  "ark-ff 0.5.0",
  "ark-serialize 0.5.0",
  "digest",
- "generic-array",
  "hex",
  "keccak",
  "log",
@@ -1475,12 +1474,13 @@ dependencies = [
 [[package]]
 name = "nimue-pow"
 version = "0.1.0"
-source = "git+https://github.com/arkworks-rs/nimue#b28eb124420eede1a890e3c64b37adfff94938d3"
+source = "git+https://github.com/arkworks-rs/nimue?rev=3a83250#3a83250d9e30046be464753901430710232561fc"
 dependencies = [
  "blake3",
  "bytemuck",
  "keccak",
  "nimue",
+ "rand",
  "rayon",
 ]
 
